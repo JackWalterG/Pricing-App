@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing Calculator</title>
+    <style>
+        :root {
+            --color-primary: #6320DF;
+            --color-primary-hover: #5218CC;
+            --color-accent: #FFA500;
+            --color-background: #fcfcf9;
+            --color-surface: #ffffff;
+            --color-text: #134252;
+            --color-text-secondary: #626c7d;
+            --color-border: rgba(94, 82, 64, 0.2);
+            --color-focus-ring: rgba(99, 32, 223, 0.4);
+            --color-error: #c01547;
+            --color-success: #6320DF;
+            --space-8: 8px;
+            --space-12: 12px;
+            --space-16: 16px;
+            --space-20: 20px;
+            --space-24: 24px;
+            --radius-base: 8px;
+            --radius-lg: 12px;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+            box-sizing: border-box;
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+        body {
+            font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--color-background);
+            color: var(--color-text);
+            margin: 0;
+            padding: var(--space-20);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin: 0 0 var(--space-20) 0;
+            font-weight: 600;
+            background: linear-gradient(135deg, #6320DF 0%, #FFA500 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .packages-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: var(--space-20);
+            margin-bottom: var(--space-24);
+        }
+
+        .package {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-16);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .package-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-16);
+            padding-bottom: var(--space-12);
+            border-bottom: 2px solid var(--color-primary);
+        }
+
+        .package-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            color: var(--color-primary);
+        }
+
+        .btn-remove-package {
+            background: #f0f0f0;
+            border: 1px solid var(--color-border);
+            color: var(--color-error);
+            padding: 4px 12px;
+            border-radius: var(--radius-base);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 150ms;
+        }
+
+        .btn-remove-package:hover {
+            background: #e8e8e8;
+        }
+
+        .items-section {
+            margin-bottom: var(--space-20);
+        }
+
+        .section-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-12);
+            display: block;
+        }
+
+        .item-row {
+            background: #f9f9f9;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-base);
+            padding: var(--space-12);
+            margin-bottom: var(--space-12);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-12);
+        }
+
+        .item-fields {
+            display: grid;
+            gap: var(--space-8);
+        }
+
+        .item-row-header {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--color-text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .field-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-8);
+        }
+
+        .field-group.full {
+            grid-template-columns: 1fr;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--color-text-secondary);
+            text-transform: uppercase;
+        }
+
+        input, select {
+            padding: var(--space-8) var(--space-12);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-base);
+            font-size: 13px;
+            font-family: inherit;
+            background: white;
+            color: var(--color-text);
+            transition: border-color 150ms, box-shadow 150ms;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px var(--color-focus-ring);
+        }
+
+        input[type="number"] {
+            font-family: 'Courier New', monospace;
+        }
+
+        .item-summary {
+            font-size: 11px;
+            color: var(--color-text-secondary);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            text-align: right;
+        }
+
+        .summary-line {
+            display: flex;
+            justify-content: space-between;
+            gap: var(--space-12);
+            padding: 2px 0;
+        }
+
+        .summary-label {
+            font-weight: 500;
+        }
+
+        .summary-value {
+            font-family: 'Courier New', monospace;
+            font-weight: 500;
+        }
+
+        .btn-remove-item {
+            padding: 4px 8px;
+            background: #f0f0f0;
+            border: 1px solid var(--color-border);
+            color: var(--color-error);
+            border-radius: var(--radius-base);
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 150ms;
+            align-self: start;
+            white-space: nowrap;
+        }
+
+        .btn-remove-item:hover {
+            background: #e8e8e8;
+        }
+
+        .add-item-buttons {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-8);
+            margin-bottom: var(--space-16);
+        }
+
+        .btn {
+            padding: var(--space-8) var(--space-12);
+            border: 1px solid var(--color-primary);
+            background: white;
+            color: var(--color-primary);
+            border-radius: var(--radius-base);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 150ms;
+        }
+
+        .btn:hover {
+            background: #f0f8ff;
+        }
+
+        .btn-primary {
+            background: var(--color-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--color-primary-hover);
+        }
+
+        .package-totals {
+            background: #f0f8ff;
+            border: 1px solid var(--color-primary);
+            border-radius: var(--radius-base);
+            padding: var(--space-12);
+            margin-top: var(--space-16);
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+
+        .totals-label {
+            font-weight: 500;
+        }
+
+        .totals-value {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+
+        .totals-row.final {
+            padding: 8px 0;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--color-primary);
+            font-size: 14px;
+            color: var(--color-primary);
+        }
+
+        .markup-control {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-20);
+            margin-top: var(--space-24);
+        }
+
+        .markup-header {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: var(--space-16);
+            color: var(--color-text);
+        }
+
+        .markup-input-group {
+            display: flex;
+            align-items: flex-end;
+            gap: var(--space-12);
+        }
+
+        .markup-field {
+            flex: 1;
+            max-width: 200px;
+        }
+
+        .markup-display {
+            font-size: 13px;
+            color: var(--color-text-secondary);
+            min-width: 150px;
+        }
+
+        .add-package-section {
+            text-align: center;
+            padding: var(--space-20) 0;
+        }
+
+        .btn-add-package {
+            padding: var(--space-12) var(--space-24);
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius-base);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 150ms;
+        }
+
+        .btn-add-package:hover {
+            background: var(--color-primary-hover);
+        }
+
+        .collapsible-container {
+            background: #f9f9f9;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-base);
+            padding: var(--space-12);
+            margin-bottom: var(--space-12);
+        }
+
+        .collapsible-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-8) 0;
+            margin-bottom: var(--space-12);
+            cursor: pointer;
+            user-select: none;
+            width: 100%;
+        }
+
+        .collapsible-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            margin-right: var(--space-8);
+            font-size: 12px;
+            color: var(--color-primary);
+            transition: transform 150ms ease;
+            flex-shrink: 0;
+        }
+
+        .collapsible-container.expanded .collapsible-toggle {
+            transform: rotate(90deg);
+        }
+
+        .collapsible-summary {
+            flex: 1;
+            font-weight: 500;
+            color: var(--color-text);
+        }
+
+        .collapsible-totals {
+            font-size: 11px;
+            color: var(--color-text-secondary);
+            text-align: right;
+            min-width: 200px;
+        }
+
+        .collapsible-content {
+            display: none;
+            margin-top: var(--space-12);
+            padding-top: var(--space-12);
+            border-top: 1px solid var(--color-border);
+        }
+
+        .collapsible-content.expanded {
+            display: block;
+        }
+
+        .hourly-product-container {
+            background: #f9f9f9;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-base);
+            padding: var(--space-12);
+            margin-bottom: var(--space-12);
+        }
+
+        .hourly-product-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-8) 0;
+            margin-bottom: var(--space-12);
+            cursor: pointer;
+            user-select: none;
+            width: 100%;
+        }
+
+        .hourly-product-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            margin-right: var(--space-8);
+            font-size: 12px;
+            color: var(--color-primary);
+            transition: transform 150ms ease;
+            flex-shrink: 0;
+        }
+
+        .hourly-product-container.expanded .hourly-product-toggle {
+            transform: rotate(90deg);
+        }
+
+        .hourly-product-summary {
+            flex: 1;
+            font-weight: 500;
+            color: var(--color-text);
+        }
+
+        .hourly-product-totals {
+            font-size: 11px;
+            color: var(--color-text-secondary);
+            text-align: right;
+            min-width: 200px;
+        }
+
+        .hourly-product-content {
+            display: none;
+            margin-top: var(--space-12);
+            padding-top: var(--space-12);
+            border-top: 1px solid var(--color-border);
+        }
+
+        .hourly-product-content.expanded {
+            display: block;
+        }
+
+        .nested-team-member {
+            background: white;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-base);
+            padding: var(--space-12);
+            margin-bottom: var(--space-8);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-8);
+        }
+
+        .nested-team-member-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: var(--space-12);
+            width: 100%;
+            align-items: start;
+        }
+
+        .nested-team-member-fields .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+            width: 100%;
+        }
+
+        .nested-team-member-fields input {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .btn-add-nested-member {
+            padding: var(--space-8) var(--space-12);
+            border: 1px solid var(--color-primary);
+            background: white;
+            color: var(--color-primary);
+            border-radius: var(--radius-base);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 150ms;
+            width: 100%;
+        }
+
+        .btn-add-nested-member:hover {
+            background: #f0f8ff;
+        }
+
+        .btn-remove-nested-member {
+            padding: 4px 8px;
+            background: #f0f0f0;
+            border: 1px solid var(--color-border);
+            color: var(--color-error);
+            border-radius: var(--radius-base);
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 150ms;
+            align-self: start;
+            white-space: nowrap;
+        }
+
+        .btn-remove-nested-member:hover {
+            background: #e8e8e8;
+        }
+
+        @media (max-width: 768px) {
+            .packages-grid {
+                grid-template-columns: 1fr;
+            }
+            .add-item-buttons {
+                grid-template-columns: 1fr;
+            }
+            .field-group {
+                grid-template-columns: 1fr;
+            }
+            .nested-team-member-fields {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pricing Calculator</h1>
+
+        <div style="margin-bottom: var(--space-20);">
+            <label for="projectName" style="font-size: 12px; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; margin-bottom: var(--space-8); display: block;">Project Name</label>
+            <input type="text" id="projectName" placeholder="Enter project name..." style="width: 100%; max-width: 400px; padding: var(--space-12); border: 1px solid var(--color-border); border-radius: var(--radius-base); font-size: 16px; font-family: inherit; background: white; color: var(--color-text);" oninput="updateProjectName(this.value)">
+        </div>
+
+        <div class="packages-grid" id="packagesGrid">
+            <!-- Packages will be generated here -->
+        </div>
+
+        <div class="markup-control">
+            <div class="markup-header">Global Markup</div>
+            <div class="markup-input-group">
+                <div class="markup-field">
+                    <label for="globalMarkup">Markup Percentage</label>
+                    <input type="number" id="globalMarkup" min="0" max="999" step="1" value="20" oninput="updateAllCalculations()">
+                </div>
+                <div class="markup-display">
+                    Applied to all labor-based items, team members, hour-based products across all packages
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: var(--space-16); padding-top: var(--space-16); border-top: 1px solid var(--color-border);">
+            <div style="font-size: 12px; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; margin-bottom: var(--space-12); display: block;">Export Pricing Data</div>
+            <div style="display: flex; gap: var(--space-8); flex-wrap: wrap; align-items: center;">
+                <button class="btn" onclick="downloadItemsAsCSV()">DOWNLOAD CSV</button>
+            </div>
+        </div>
+
+        <div style="margin-top: var(--space-16); padding-top: var(--space-16); border-top: 1px solid var(--color-border);">
+            <div style="font-size: 12px; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; margin-bottom: var(--space-12); display: block;">Backup / Restore State</div>
+            <div style="display: flex; gap: var(--space-8); flex-wrap: wrap; align-items: center;">
+                <button class="btn" onclick="downloadStateAsJSON()">DOWNLOAD JSON</button>
+                <label style="cursor: pointer;">
+                    <span class="btn">UPLOAD JSON</span>
+                    <input type="file" id="jsonUpload" accept="application/json" onchange="loadStateFromJSON(event)" style="display: none;">
+                </label>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Data structure
+        let state = {
+            projectName: '',
+            packages: [
+                { id: 1, name: 'Good', items: [] },
+                { id: 2, name: 'Better', items: [] },
+                { id: 3, name: 'Best', items: [] }
+            ],
+            globalMarkupPercent: 20,
+            nextPackageId: 4,
+            nextItemId: 1,
+            nextNestedMemberId: 1
+        };
+
+        // Update project name
+        function updateProjectName(value) {
+            state.projectName = value;
+        }
+
+        // Initialize
+        function init() {
+            attachEventListeners();
+            render();
+        }
+
+        // Render everything
+        function render() {
+            const grid = document.getElementById('packagesGrid');
+            grid.innerHTML = '';
+            state.packages.forEach((pkg, index) => {
+                const pkgEl = createPackageElement(pkg, index);
+                grid.appendChild(pkgEl);
+            });
+        }
+
+        // Attach event listeners using delegation
+        function attachEventListeners() {
+            const grid = document.getElementById('packagesGrid');
+            
+            grid.addEventListener('click', e => {
+                if (e.target.classList.contains('btn-add-flat-product')) {
+                    const packageId = parseInt(e.target.dataset.packageId);
+                    addItem(packageId, 'flat-product');
+                    return false;
+                }
+                if (e.target.classList.contains('btn-add-hourly-product')) {
+                    const packageId = parseInt(e.target.dataset.packageId);
+                    addItem(packageId, 'hourly-product');
+                    return false;
+                }
+                if (e.target.classList.contains('btn-remove-item')) {
+                    const packageId = parseInt(e.target.dataset.packageId);
+                    const itemId = parseInt(e.target.dataset.itemId);
+                    removeItem(packageId, itemId);
+                    return false;
+                }
+
+                const headerParent = e.target.closest('.hourly-product-header');
+                if (headerParent) {
+                    const container = headerParent.closest('[data-hourly-id]');
+                    if (container) {
+                        container.classList.toggle('expanded');
+                        const content = container.querySelector('.hourly-product-content');
+                        content.classList.toggle('expanded');
+                        return false;
+                    }
+                }
+
+                const collapsibleHeader = e.target.closest('.collapsible-header');
+                if (collapsibleHeader) {
+                    const container = collapsibleHeader.closest('[data-flat-id]');
+                    if (container) {
+                        container.classList.toggle('expanded');
+                        const content = container.querySelector('.collapsible-content');
+                        content.classList.toggle('expanded');
+                        return false;
+                    }
+                }
+
+                if (e.target.classList.contains('btn-add-nested-member')) {
+                    const packageId = parseInt(e.target.dataset.packageId);
+                    const itemId = parseInt(e.target.dataset.itemId);
+                    addNestedTeamMember(packageId, itemId);
+                    return false;
+                }
+
+                if (e.target.classList.contains('btn-remove-nested-member')) {
+                    const packageId = parseInt(e.target.dataset.packageId);
+                    const itemId = parseInt(e.target.dataset.itemId);
+                    const memberId = parseInt(e.target.dataset.memberId);
+                    removeNestedTeamMember(packageId, itemId, memberId);
+                    return false;
+                }
+
+                if (e.target.classList.contains('btn-remove-package')) {
+                    const packageId = parseInt(e.target.dataset.packageId);
+                    removePackage(packageId);
+                    return false;
+                }
+            });
+
+            grid.addEventListener('input', e => {
+                if (e.target.classList.contains('item-input')) {
+                    const packageId = parseInt(e.target.dataset.packageId);
+                    const itemId = parseInt(e.target.dataset.itemId);
+                    const field = e.target.dataset.field;
+                    const value = e.target.dataset.field === 'name' ? e.target.value : parseFloat(e.target.value) || 0;
+                    updateItem(packageId, itemId, field, value);
+                }
+
+                if (e.target.classList.contains('nested-member-input')) {
+                    const packageId = parseInt(e.target.dataset.packageId);
+                    const itemId = parseInt(e.target.dataset.itemId);
+                    const memberId = parseInt(e.target.dataset.memberId);
+                    const field = e.target.dataset.field;
+                    const value = e.target.dataset.field === 'name' ? e.target.value : parseFloat(e.target.value) || 0;
+                    updateNestedTeamMember(packageId, itemId, memberId, field, value);
+                }
+            });
+
+            document.getElementById('globalMarkup').addEventListener('input', updateGlobalMarkup);
+        }
+
+        // Create package element
+        function createPackageElement(pkg, index) {
+            const div = document.createElement('div');
+            div.className = 'package';
+
+            div.innerHTML = `
+                <div class="package-header">
+                    <h2 class="package-title">${pkg.name}</h2>
+                </div>
+
+                <div class="items-section">
+                    <span class="section-label">Add Items to ${pkg.name}</span>
+                    <div class="add-item-buttons">
+                        <button class="btn btn-add-flat-product" data-package-id="${pkg.id}">
+                            Flat Rate Deliverable
+                        </button>
+                        <button class="btn btn-add-hourly-product" style="width: 100%; margin-bottom: var(--space-16);" data-package-id="${pkg.id}">
+                            Hour-Based Deliverable
+                        </button>
+                    </div>
+                    <div id="items-${pkg.id}">
+                        <!-- Items rendered here -->
+                    </div>
+                </div>
+
+                <div class="package-totals">
+                    <div class="totals-row">
+                        <span class="totals-label">Base Total</span>
+                        <span class="totals-value" id="base-total-${pkg.id}">$0.00</span>
+                    </div>
+                    <div class="totals-row">
+                        <span class="totals-label">Markup (${state.globalMarkupPercent}%)</span>
+                        <span class="totals-value" id="markup-total-${pkg.id}">$0.00</span>
+                    </div>
+                    <div class="totals-row final">
+                        <span class="totals-label">Final Total</span>
+                        <span class="totals-value" id="final-total-${pkg.id}">$0.00</span>
+                    </div>
+                </div>
+            `;
+
+            // Render items
+            const itemsContainer = div.querySelector(`#items-${pkg.id}`);
+            if (itemsContainer) {
+                pkg.items.forEach(item => {
+                    itemsContainer.appendChild(createItemElement(pkg.id, item));
+                });
+            }
+
+            return div;
+        }
+
+        // Create hourly product element
+        function createHourlyProductElement(packageId, item) {
+            const div = document.createElement('div');
+            div.className = 'hourly-product-container';
+            div.setAttribute('data-hourly-id', item.id);
+
+            const base = calculateHourlyProductBaseAmount(item);
+            const markup = calculateMarkupAmount(item);
+            const final = base + markup;
+
+            div.innerHTML = `
+                <div class="hourly-product-header">
+                    <div class="hourly-product-toggle">▶</div>
+                    <div class="hourly-product-summary">${item.name || 'Untitled Hourly Based Deliverable'}</div>
+                    <div class="hourly-product-totals">
+                        <span id="hourly-summary-${item.id}">Base: $${base.toFixed(2)}, Markup: $${markup.toFixed(2)}, Total: $${final.toFixed(2)}</span>
+                    </div>
+                </div>
+
+                <div class="hourly-product-content">
+                    <div class="field-group full" style="margin-bottom: var(--space-12);">
+                        <div class="form-group">
+                            <label>Deliverable Name</label>
+                            <input type="text" placeholder="e.g., Website Redesign" value="${item.name}" class="item-input" data-package-id="${packageId}" data-item-id="${item.id}" data-field="name">
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: var(--space-12);">
+                        <span class="section-label">Package Elements</span>
+                        <div id="nested-members-${item.id}">
+                            <!-- Nested package elements rendered here -->
+                        </div>
+                        <button class="btn-add-nested-member" data-package-id="${packageId}" data-item-id="${item.id}">
+                            Add Package Element
+                        </button>
+                    </div>
+
+                    <button class="btn-remove-item" data-package-id="${packageId}" data-item-id="${item.id}">
+                        Remove Deliverable
+                    </button>
+                </div>
+            `;
+
+            // Render nested team members
+            const nestedContainer = div.querySelector(`#nested-members-${item.id}`);
+            if (nestedContainer && item.teamMembers && item.teamMembers.length > 0) {
+                item.teamMembers.forEach(member => {
+                    nestedContainer.appendChild(createNestedTeamMemberElement(packageId, item.id, member));
+                });
+            }
+
+            return div;
+        }
+
+        // Create nested team member element
+        function createNestedTeamMemberElement(packageId, itemId, member) {
+            const div = document.createElement('div');
+            div.className = 'nested-team-member';
+
+            const base = member.hourlyRate ? member.hourlyRate * member.hours : 0;
+            const markup = calculateMarkupAmount({
+                type: 'team-member',
+                hourlyRate: member.hourlyRate,
+                hours: member.hours
+            });
+
+            div.innerHTML = `
+                <div class="nested-team-member-fields">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" placeholder="e.g., Developer" value="${member.name}" class="nested-member-input" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" data-field="name">
+                    </div>
+                    <div class="form-group">
+                        <label>Rate /hr</label>
+                        <input type="number" placeholder="100" min="0" step="1" value="${member.hourlyRate}" class="nested-member-input" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" data-field="hourlyRate">
+                    </div>
+                    <div class="form-group">
+                        <label>Hours</label>
+                        <input type="number" placeholder="40" min="0" step="0.25" value="${member.hours}" class="nested-member-input" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" data-field="hours">
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: var(--space-8); border-top: 1px solid var(--color-border);">
+                    <div style="font-size: 11px; color: var(--color-text-secondary);">
+                        Base: $${base.toFixed(2)} | Markup: $${markup.toFixed(2)} | Total: $${(base + markup).toFixed(2)}
+                    </div>
+                    <button class="btn-remove-nested-member" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}">
+                        Remove
+                    </button>
+                </div>
+            `;
+
+            return div;
+        }
+
+        // Calculate hourly product base amount (sum of nested members)
+        function calculateHourlyProductBaseAmount(item) {
+            if (!item.teamMembers || item.teamMembers.length === 0) return 0;
+            return item.teamMembers.reduce((sum, member) => {
+                return sum + (member.hourlyRate ? member.hourlyRate * member.hours : 0);
+            }, 0);
+        }
+
+        // Add nested team member
+        function addNestedTeamMember(packageId, itemId) {
+            const pkg = state.packages.find(p => p.id === packageId);
+            if (pkg) {
+                const item = pkg.items.find(i => i.id === itemId);
+                if (item) {
+                    if (!item.teamMembers) item.teamMembers = [];
+                    item.teamMembers.push({
+                        id: state.nextNestedMemberId++,
+                        name: '',
+                        hourlyRate: 0,
+                        hours: 0
+                    });
+                    renderNestedMembersForItem(packageId, itemId);
+                    updateAllCalculations();
+                }
+            }
+        }
+
+        // Render nested members for an item
+        function renderNestedMembersForItem(packageId, itemId) {
+            const pkg = state.packages.find(p => p.id === packageId);
+            if (pkg) {
+                const item = pkg.items.find(i => i.id === itemId);
+                const container = document.getElementById(`nested-members-${itemId}`);
+                if (container) {
+                    container.innerHTML = '';
+                    if (item && item.teamMembers && item.teamMembers.length > 0) {
+                        item.teamMembers.forEach(member => {
+                            container.appendChild(createNestedTeamMemberElement(packageId, itemId, member));
+                        });
+                    }
+                }
+            }
+        }
+
+        // Update nested team member
+        function updateNestedTeamMember(packageId, itemId, memberId, field, value) {
+            const pkg = state.packages.find(p => p.id === packageId);
+            if (pkg) {
+                const item = pkg.items.find(i => i.id === itemId);
+                if (item && item.teamMembers) {
+                    const member = item.teamMembers.find(m => m.id === memberId);
+                    if (member) {
+                        member[field] = value;
+                        updateAllCalculations();
+                    }
+                }
+            }
+        }
+
+        // Remove nested team member
+        function removeNestedTeamMember(packageId, itemId, memberId) {
+            const pkg = state.packages.find(p => p.id === packageId);
+            if (pkg) {
+                const item = pkg.items.find(i => i.id === itemId);
+                if (item && item.teamMembers) {
+                    item.teamMembers = item.teamMembers.filter(m => m.id !== memberId);
+                    renderNestedMembersForItem(packageId, itemId);
+                    updateAllCalculations();
+                }
+            }
+        }
+
+        // Create flat product element
+        function createFlatProductElement(packageId, item) {
+            const div = document.createElement('div');
+            div.className = 'collapsible-container';
+            div.setAttribute('data-flat-id', item.id);
+
+            const base = item.price ? item.price : 0;
+            const markup = calculateMarkupAmount(item);
+            const final = base + markup;
+
+            div.innerHTML = `
+                <div class="collapsible-header">
+                    <div class="collapsible-toggle">▶</div>
+                    <div class="collapsible-summary">${item.name || 'Untitled Flat Rate Deliverable'}</div>
+                    <div class="collapsible-totals">
+                        <span id="flat-summary-${item.id}">Base: $${base.toFixed(2)}, Total: $${final.toFixed(2)}</span>
+                    </div>
+                </div>
+
+                <div class="collapsible-content">
+                    <div class="field-group full" style="margin-bottom: var(--space-12);">
+                        <div class="form-group">
+                            <label>Product Name</label>
+                            <input type="text" placeholder="e.g., Design Assets" value="${item.name}" class="item-input" data-package-id="${packageId}" data-item-id="${item.id}" data-field="name">
+                        </div>
+                    </div>
+
+                    <div class="field-group full" style="margin-bottom: var(--space-12);">
+                        <div class="form-group">
+                            <label>Sale Price $</label>
+                            <input type="number" placeholder="500" min="0" step="1" value="${item.price}" class="item-input" data-package-id="${packageId}" data-item-id="${item.id}" data-field="price">
+                        </div>
+                    </div>
+
+                    <button class="btn-remove-item" data-package-id="${packageId}" data-item-id="${item.id}">
+                        Remove Deliverable
+                    </button>
+                </div>
+            `;
+
+            return div;
+        }
+
+        // Create item element
+        function createItemElement(packageId, item) {
+            if (item.type === 'hourly-product') {
+                return createHourlyProductElement(packageId, item);
+            }
+            if (item.type === 'flat-product') {
+                return createFlatProductElement(packageId, item);
+            }
+        }
+
+        // Calculate functions
+        function calculateBaseAmount(item) {
+            if (item.type === 'team-member') {
+                return item.hourlyRate ? item.hourlyRate * item.hours : 0;
+            } else if (item.type === 'hourly-product') {
+                return calculateHourlyProductBaseAmount(item);
+            } else if (item.type === 'flat-product') {
+                return item.price ? item.price : 0;
+            }
+            return 0;
+        }
+
+        function calculateMarkupAmount(item) {
+            if (item.type === 'flat-product') return 0; // Flat products already marked up
+            const base = calculateBaseAmount(item);
+            const markupPercent = state.globalMarkupPercent / 100;
+            return base * markupPercent;
+        }
+
+        // Remove package
+        function removePackage(packageId) {
+            if (state.packages.length === 1) {
+                alert('Must keep at least one package');
+                return;
+            }
+            state.packages = state.packages.filter(p => p.id !== packageId);
+            render();
+        }
+
+        // Add item
+        function addItem(packageId, type) {
+            const pkg = state.packages.find(p => p.id === packageId);
+            if (pkg) {
+                const newItem = {
+                    id: state.nextItemId++,
+                    type: type,
+                    name: '',
+                    hourlyRate: 0,
+                    hours: 0,
+                    price: 0
+                };
+                if (type === 'hourly-product') {
+                    newItem.teamMembers = [];
+                }
+                pkg.items.push(newItem);
+                renderItemsForPackage(packageId);
+                updateAllCalculations();
+            }
+        }
+
+        // Render items for a package
+        function renderItemsForPackage(packageId) {
+            const pkg = state.packages.find(p => p.id === packageId);
+            const container = document.getElementById(`items-${packageId}`);
+            if (container) {
+                container.innerHTML = '';
+                pkg.items.forEach(item => {
+                    container.appendChild(createItemElement(packageId, item));
+                });
+            }
+        }
+
+        // Update item
+        function updateItem(packageId, itemId, field, value) {
+            const pkg = state.packages.find(p => p.id === packageId);
+            if (pkg) {
+                const item = pkg.items.find(i => i.id === itemId);
+                if (item) {
+                    item[field] = value;
+                    
+                    // Update header display for hourly products
+                    if (item.type === 'hourly-product' && field === 'name') {
+                        const summary = document.querySelector(`[data-hourly-id="${itemId}"] .hourly-product-summary`);
+                        if (summary) summary.textContent = value || 'Untitled Deliverable';
+                    }
+
+                    // Update header display for flat products
+                    if (item.type === 'flat-product' && field === 'name') {
+                        const summary = document.querySelector(`[data-flat-id="${itemId}"] .collapsible-summary`);
+                        if (summary) summary.textContent = value || 'Untitled Product';
+                    }
+
+                    // Update flat product totals display
+                    if (item.type === 'flat-product' && field === 'price') {
+                        const summaryEl = document.getElementById(`flat-summary-${itemId}`);
+                        if (summaryEl) {
+                            const base = item.price ? item.price : 0;
+                            const markup = calculateMarkupAmount(item);
+                            const final = base + markup;
+                            summaryEl.textContent = `Base: $${base.toFixed(2)}, Total: $${final.toFixed(2)}`;
+                        }
+                    }
+
+                    updateAllCalculations();
+                }
+            }
+        }
+
+        // Remove item
+        function removeItem(packageId, itemId) {
+            const pkg = state.packages.find(p => p.id === packageId);
+            if (pkg) {
+                pkg.items = pkg.items.filter(i => i.id !== itemId);
+                renderItemsForPackage(packageId);
+                updateAllCalculations();
+            }
+        }
+
+        // Update global markup
+        function updateGlobalMarkup() {
+            const input = document.getElementById('globalMarkup');
+            state.globalMarkupPercent = parseFloat(input.value) || 0;
+            updateAllCalculations();
+        }
+
+        // Update all calculations
+        function updateAllCalculations() {
+            state.globalMarkupPercent = parseFloat(document.getElementById('globalMarkup').value) || 0;
+
+            state.packages.forEach(pkg => {
+                let baseTotal = 0;
+                let markupTotal = 0;
+
+                // Update item-level calculations for this package
+                pkg.items.forEach(item => {
+                    const base = calculateBaseAmount(item);
+                    const markup = calculateMarkupAmount(item);
+                    baseTotal += base;
+                    markupTotal += markup;
+
+                    if (item.type === 'hourly-product') {
+                        const summaryEl = document.getElementById(`hourly-summary-${item.id}`);
+                        if (summaryEl) {
+                            summaryEl.textContent = `Base: $${base.toFixed(2)}, Markup: $${markup.toFixed(2)}, Total: $${(base + markup).toFixed(2)}`;
+                        }
+                    } else {
+                        const baseEl = document.getElementById(`item-base-${item.id}`);
+                        const markupEl = document.getElementById(`item-markup-${item.id}`);
+                        const totalEl = document.getElementById(`item-total-${item.id}`);
+                        if (baseEl) baseEl.textContent = `$${base.toFixed(2)}`;
+                        if (markupEl) markupEl.textContent = `$${markup.toFixed(2)}`;
+                        if (totalEl) totalEl.textContent = `$${(base + markup).toFixed(2)}`;
+                    }
+                });
+
+                // Add items from previous tiers for Better and Best
+                if (pkg.name === 'Better') {
+                    const goodPkg = state.packages.find(p => p.name === 'Good');
+                    if (goodPkg) {
+                        goodPkg.items.forEach(item => {
+                            baseTotal += calculateBaseAmount(item);
+                            markupTotal += calculateMarkupAmount(item);
+                        });
+                    }
+                } else if (pkg.name === 'Best') {
+                    const goodPkg = state.packages.find(p => p.name === 'Good');
+                    const betterPkg = state.packages.find(p => p.name === 'Better');
+                    if (goodPkg) {
+                        goodPkg.items.forEach(item => {
+                            baseTotal += calculateBaseAmount(item);
+                            markupTotal += calculateMarkupAmount(item);
+                        });
+                    }
+                    if (betterPkg) {
+                        betterPkg.items.forEach(item => {
+                            baseTotal += calculateBaseAmount(item);
+                            markupTotal += calculateMarkupAmount(item);
+                        });
+                    }
+                }
+
+                const baseTotalEl = document.getElementById(`base-total-${pkg.id}`);
+                const markupTotalEl = document.getElementById(`markup-total-${pkg.id}`);
+                const finalTotalEl = document.getElementById(`final-total-${pkg.id}`);
+
+                if (baseTotalEl) baseTotalEl.textContent = `$${baseTotal.toFixed(2)}`;
+                if (markupTotalEl) {
+                    markupTotalEl.textContent = `$${markupTotal.toFixed(2)}`;
+                    markupTotalEl.closest('.totals-row').querySelector('.totals-label').textContent = `Markup (${state.globalMarkupPercent}%)`;
+                }
+                if (finalTotalEl) finalTotalEl.textContent = `$${(baseTotal + markupTotal).toFixed(2)}`;
+            });
+        }            // ===== IMPROVED CSV EXPORT =====
+            function downloadItemsAsCSV() {
+                const rows = [];
+                
+                // Helper function to format currency
+                const formatCurrency = (value) => `$${parseFloat(value).toFixed(2)}`;
+
+                // Metadata row
+                rows.push(['PRICING CALCULATOR EXPORT']);
+                rows.push(['Project Name', state.projectName || 'Untitled Project']);
+                rows.push(['Exported', new Date().toISOString().split('T')[0]]);
+                rows.push(['Global Markup %', state.globalMarkupPercent]);
+                rows.push([]); // Blank row
+
+                // Summary section
+                rows.push(['=== SUMMARY BY PACKAGE ===']);
+                rows.push(['Package', 'Base Total', 'Markup', 'Final Total']);
+                
+                state.packages.forEach(pkg => {
+                    let baseTotal = 0;
+                    let markupTotal = 0;
+
+                    pkg.items.forEach(item => {
+                        baseTotal += calculateBaseAmount(item);
+                        markupTotal += calculateMarkupAmount(item);
+                    });
+
+                    // Add previous tiers for Better and Best
+                    if (pkg.name === 'Better') {
+                        const goodPkg = state.packages.find(p => p.name === 'Good');
+                        if (goodPkg) {
+                            goodPkg.items.forEach(item => {
+                                baseTotal += calculateBaseAmount(item);
+                                markupTotal += calculateMarkupAmount(item);
+                            });
+                        }
+                    } else if (pkg.name === 'Best') {
+                        const goodPkg = state.packages.find(p => p.name === 'Good');
+                        const betterPkg = state.packages.find(p => p.name === 'Better');
+                        if (goodPkg) {
+                            goodPkg.items.forEach(item => {
+                                baseTotal += calculateBaseAmount(item);
+                                markupTotal += calculateMarkupAmount(item);
+                            });
+                        }
+                        if (betterPkg) {
+                            betterPkg.items.forEach(item => {
+                                baseTotal += calculateBaseAmount(item);
+                                markupTotal += calculateMarkupAmount(item);
+                            });
+                        }
+                    }
+
+                    rows.push([
+                        pkg.name,
+                        formatCurrency(baseTotal),
+                        formatCurrency(markupTotal),
+                        formatCurrency(baseTotal + markupTotal)
+                    ]);
+                });
+
+                rows.push([]); // Blank row
+
+                // Items section
+                rows.push(['=== ITEMS DETAIL ===']);
+                rows.push(['Package', 'Item Type', 'Item Name', 'Unit Price', 'Quantity', 'Base Amount', 'Markup %', 'Markup Amount', 'Final Amount', 'Description']);
+
+                state.packages.forEach(pkg => {
+                    pkg.items.forEach(item => {
+                        const base = calculateBaseAmount(item);
+                        const markup = calculateMarkupAmount(item);
+                        const final = base + markup;
+
+                        if (item.type === 'flat-product') {
+                            rows.push([
+                                pkg.name,
+                                'Flat Rate',
+                                item.name || 'Untitled',
+                                formatCurrency(item.price),
+                                '1',
+                                formatCurrency(item.price),
+                                '0%',
+                                formatCurrency(0),
+                                formatCurrency(item.price),
+                                'Flat-price deliverable'
+                            ]);
+                        } else if (item.type === 'hourly-product') {
+                            rows.push([
+                                pkg.name,
+                                'Hourly',
+                                item.name || 'Untitled',
+                                '',
+                                '',
+                                formatCurrency(base),
+                                state.globalMarkupPercent + '%',
+                                formatCurrency(markup),
+                                formatCurrency(final),
+                                `Container for package elements (${item.teamMembers?.length || 0} elements)`
+                            ]);
+                        }
+                    });
+                });
+
+                rows.push([]); // Blank row
+
+                // Package elements section
+                rows.push(['=== PACKAGE ELEMENTS (Nested) ===']);
+                rows.push(['Package', 'Parent Item', 'Element Name', 'Hourly Rate', 'Hours', 'Base Amount', 'Markup %', 'Markup Amount', 'Final Amount', 'Calculation']);
+
+                state.packages.forEach(pkg => {
+                    pkg.items.forEach(item => {
+                        if (item.type === 'hourly-product' && item.teamMembers && item.teamMembers.length > 0) {
+                            item.teamMembers.forEach(member => {
+                                const base = member.hourlyRate ? member.hourlyRate * member.hours : 0;
+                                const markup = calculateMarkupAmount({
+                                    type: 'team-member',
+                                    hourlyRate: member.hourlyRate,
+                                    hours: member.hours
+                                });
+                                const final = base + markup;
+
+                                rows.push([
+                                    pkg.name,
+                                    item.name || 'Untitled',
+                                    member.name || 'Unnamed',
+                                    formatCurrency(member.hourlyRate),
+                                    member.hours.toFixed(2),
+                                    formatCurrency(base),
+                                    state.globalMarkupPercent + '%',
+                                    formatCurrency(markup),
+                                    formatCurrency(final),
+                                    `${formatCurrency(member.hourlyRate)}/hr × ${member.hours.toFixed(2)} hrs = ${formatCurrency(base)} + ${state.globalMarkupPercent}% markup`
+                                ]);
+                            });
+                        }
+                    });
+                });
+
+            // Convert to CSV
+            const csv = rows.map((row, rowIndex) => {
+                return row.map((v, colIndex) => {
+                    const s = String(v ?? '');
+                    // Standard CSV escaping for all columns
+                    if (/[,"\n]/.test(s)) {
+                        return `"${s.replace(/"/g, '""')}"`;
+                    }
+                    return s;
+                }).join(',');
+            }).join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const projectSlug = state.projectName ? state.projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : 'untitled';
+            a.download = `${projectSlug}-pricing-${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadStateAsJSON() {
+            const dataStr = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(state, null, 2))}`;
+            const a = document.createElement('a');
+            a.setAttribute('href', dataStr);
+            const projectSlug = state.projectName ? state.projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : 'untitled';
+            a.setAttribute('download', `${projectSlug}-pricing-state.json`);
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+
+        function loadStateFromJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (!imported || !Array.isArray(imported.packages)) {
+                        alert('Invalid file format. Expected JSON with packages array.');
+                        return;
+                    }
+
+                    // Fully restore state
+                    state = imported;
+
+                    // Ensure all required fields are present
+                    if (state.projectName === undefined) state.projectName = '';
+                    if (state.globalMarkupPercent === undefined) state.globalMarkupPercent = 20;
+                    if (state.nextPackageId === undefined) state.nextPackageId = 4;
+                    if (state.nextItemId === undefined) state.nextItemId = 1;
+                    if (state.nextNestedMemberId === undefined) state.nextNestedMemberId = 1;
+
+                    // Update project name input field
+                    document.getElementById('projectName').value = state.projectName;
+
+                    // Recalculate max IDs from imported data
+                    state.packages.forEach(pkg => {
+                        if (pkg.id >= state.nextPackageId) state.nextPackageId = pkg.id + 1;
+                        if (pkg.items) {
+                            pkg.items.forEach(item => {
+                                if (item.id >= state.nextItemId) state.nextItemId = item.id + 1;
+                                if (item.type === 'hourly-product' && !item.teamMembers) item.teamMembers = [];
+                                if (item.teamMembers) {
+                                    item.teamMembers.forEach(member => {
+                                        if (member.id >= state.nextNestedMemberId) state.nextNestedMemberId = member.id + 1;
+                                    });
+                                }
+                            });
+                        }
+                    });
+
+                    // Update the markup input field
+                    document.getElementById('globalMarkup').value = state.globalMarkupPercent;
+
+                    // Full re-render
+                    render();
+                    updateAllCalculations();
+
+                    alert('State loaded successfully!');
+                } catch (err) {
+                    console.error(err);
+                    alert(`Could not read JSON file: ${err.message}`);
+                }
+            };
+            reader.readAsText(file);
+
+            // Reset file input
+            document.getElementById('jsonUpload').value = '';
+        }
+
+        function addPackage() {
+            const name = prompt('Enter package name (e.g., Premium, Deluxe):');
+            if (name && name.trim()) {
+                state.packages.push({
+                    id: state.nextPackageId++,
+                    name: name.trim(),
+                    items: []
+                });
+                render();
+                updateAllCalculations();
+            }
+        }
+
+        // Initialize on load
+        init();
+        updateAllCalculations();
+    </script>
+</body>
+</html>

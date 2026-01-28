@@ -15,23 +15,78 @@
     <header class="app-header">
         <div class="container">
             <h1>Pricing Calculator</h1>
-            <div class="header-actions">
-                <button class="btn btn-icon" id="undoBtn" aria-label="Undo last action" disabled>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 7v6h6"></path>
-                        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.36 2.64L3 13"></path>
-                    </svg>
-                </button>
-                <button class="btn btn-icon" id="redoBtn" aria-label="Redo last action" disabled>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 7v6h-6"></path>
-                        <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64L21 13"></path>
-                    </svg>
-                </button>
-                <span class="save-status" id="saveStatus" aria-live="polite">
+            <div class="header-controls">
+                <button class="header-btn" id="undoBtn" aria-label="Undo" disabled title="Undo (Ctrl+Z)">↶</button>
+                <button class="header-btn" id="redoBtn" aria-label="Redo" disabled title="Redo (Ctrl+Shift+Z)">↷</button>
+                
+                <div class="header-divider"></div>
+                
+                <div class="markup-control-header">
+                    <label for="globalMarkup">Markup</label>
+                    <div class="input-with-suffix-compact">
+                        <input type="number" id="globalMarkup" min="0" max="999" step="1" value="20">
+                        <span>%</span>
+                    </div>
+                </div>
+                
+                <label class="margin-toggle-compact">
+                    <input type="checkbox" id="globalMarginToggle" checked>
+                    <span>Show Margin</span>
+                </label>
+                
+                <div class="header-divider"></div>
+                
+                <div class="library-dropdown">
+                    <button class="header-btn-primary" id="libraryToggle">Library</button>
+                    <div class="library-panel" id="libraryPanel" hidden>
+                        <div class="library-section">
+                            <label>Templates</label>
+                            <div class="library-row">
+                                <select class="library-select" id="templateSelect">
+                                    <option value="">Select template...</option>
+                                </select>
+                                <button class="library-btn" id="saveTemplateBtn">Save</button>
+                            </div>
+                        </div>
+                        <div class="library-section">
+                            <label>Clients</label>
+                            <div class="library-row">
+                                <select class="library-select" id="clientSelect">
+                                    <option value="">Select client...</option>
+                                </select>
+                            </div>
+                            <div class="library-row" id="projectRow" style="display: none;">
+                                <select class="library-select" id="projectSelect">
+                                    <option value="">Select project...</option>
+                                </select>
+                            </div>
+                            <div class="library-actions">
+                                <button class="library-btn-secondary" id="newClientBtn">New Client</button>
+                                <button class="library-btn" id="saveToClientBtn" disabled>Save to Client</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="header-divider"></div>
+                
+                <div class="dropdown-menu">
+                    <button class="header-btn" id="menuToggle">⋮</button>
+                    <div class="dropdown-content" id="dropdownMenu" hidden>
+                        <button id="downloadCsv">Download CSV</button>
+                        <button id="downloadJson">Download JSON</button>
+                        <label class="file-upload-inline">
+                            <span>Upload Json</span>
+                            <input type="file" id="jsonUpload" accept="application/json" class="visually-hidden">
+                        </label>
+                        <button class="btn-danger-menu" id="resetAll">Reset All</button>
+                    </div>
+                </div>
+                
+                <div class="save-status" id="saveStatus">
                     <span class="save-indicator"></span>
                     <span class="save-text">Saved</span>
-                </span>
+                </div>
             </div>
         </div>
     </header>
@@ -54,69 +109,6 @@
             <h2 id="packages-heading" class="visually-hidden">Pricing Packages</h2>
             <div class="packages-grid" id="packagesGrid" role="list" aria-live="polite">
                 <!-- Packages will be generated here -->
-            </div>
-        </section>
-
-        <fieldset class="markup-control">
-            <legend class="markup-header">Global Markup</legend>
-            <div class="markup-input-group">
-                <div class="markup-field">
-                    <label for="globalMarkup">Markup Percentage</label>
-                    <div class="input-with-suffix">
-                        <input type="number" id="globalMarkup" min="0" max="999" step="1" value="20" aria-describedby="markup-hint">
-                        <span class="input-suffix">%</span>
-                    </div>
-                </div>
-                <p id="markup-hint" class="markup-display">
-                    Applied to all labor-based items, team members, hour-based products across all packages
-                </p>
-            </div>
-        </fieldset>
-
-        <section class="export-section" aria-labelledby="export-heading">
-            <h2 id="export-heading" class="section-header">Export Pricing Data</h2>
-            <div class="button-group">
-                <button class="btn" id="downloadCsv" aria-label="Download pricing data as CSV file">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    Download CSV
-                </button>
-            </div>
-        </section>
-
-        <section class="backup-section" aria-labelledby="backup-heading">
-            <h2 id="backup-heading" class="section-header">Backup / Restore State</h2>
-            <div class="button-group">
-                <button class="btn" id="downloadJson" aria-label="Download project backup as JSON file">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    Download JSON
-                </button>
-                <label class="file-upload-label">
-                    <span class="btn" role="button" tabindex="0" aria-label="Upload JSON backup file">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="17 8 12 3 7 8"></polyline>
-                            <line x1="12" y1="3" x2="12" y2="15"></line>
-                        </svg>
-                        Upload JSON
-                    </span>
-                    <input type="file" id="jsonUpload" accept="application/json" class="visually-hidden">
-                </label>
-                <button class="btn btn-danger" id="resetAll" aria-label="Reset all data and start fresh">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        <line x1="10" y1="11" x2="10" y2="17"></line>
-                        <line x1="14" y1="11" x2="14" y2="17"></line>
-                    </svg>
-                    Reset All
-                </button>
             </div>
         </section>
 

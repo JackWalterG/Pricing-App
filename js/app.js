@@ -4,14 +4,17 @@
 let state = {
     projectName: '',
     packages: [
-        { id: 1, name: 'Good', items: [] },
-        { id: 2, name: 'Better', items: [] },
-        { id: 3, name: 'Best', items: [] }
+        { id: 1, name: 'Good', items: [], costBasis: 0 },
+        { id: 2, name: 'Better', items: [], costBasis: 0 },
+        { id: 3, name: 'Best', items: [], costBasis: 0 }
     ],
     globalMarkupPercent: 20,
+    globalShowMargin: true,
     nextPackageId: 4,
     nextItemId: 1,
-    nextNestedMemberId: 1
+    nextNestedMemberId: 1,
+    templates: {},
+    clients: {}
 };
 
 /* ============================================
@@ -90,9 +93,12 @@ function syncUIWithState() {
    AUTO-SAVE
    ============================================ */
 const STORAGE_KEY = 'pricingCalculatorState';
+const STORAGE_VERSION = '2.0.0'; // Updated for new features
+const VERSION_KEY = 'pricingCalculatorVersion';
 
 function saveToLocalStorage() {
     try {
+        localStorage.setItem(VERSION_KEY, STORAGE_VERSION);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         showSaveStatus('Saved');
     } catch (e) {
@@ -103,6 +109,13 @@ function saveToLocalStorage() {
 
 function loadFromLocalStorage() {
     try {
+        // Check version - if mismatch, start fresh
+        const savedVersion = localStorage.getItem(VERSION_KEY);
+        if (savedVersion !== STORAGE_VERSION) {
+            console.warn('Storage version mismatch, starting fresh');
+            return false;
+        }
+        
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             const parsed = JSON.parse(saved);
@@ -112,9 +125,17 @@ function loadFromLocalStorage() {
                 // Ensure all required fields
                 if (state.projectName === undefined) state.projectName = '';
                 if (state.globalMarkupPercent === undefined) state.globalMarkupPercent = 20;
+                if (state.globalShowMargin === undefined) state.globalShowMargin = true;
                 if (state.nextPackageId === undefined) state.nextPackageId = 4;
                 if (state.nextItemId === undefined) state.nextItemId = 1;
                 if (state.nextNestedMemberId === undefined) state.nextNestedMemberId = 1;
+                if (state.templates === undefined) state.templates = {};
+                if (state.clients === undefined) state.clients = {};
+                
+                // Ensure all packages have new fields
+                state.packages.forEach(pkg => {
+                    if (pkg.costBasis === undefined) pkg.costBasis = 0;
+                });
                 
                 // Recalculate max IDs
                 state.packages.forEach(pkg => {
@@ -181,6 +202,189 @@ function formatCurrency(value) {
 }
 
 /* ============================================
+   TEMPLATES MANAGEMENT
+   ============================================ */
+function saveAsTemplate(templateName) {
+    if (!templateName.trim()) {
+        alert('Please enter a template name');
+        return;
+    }
+    
+    saveToHistory();
+    
+    // Save current pricing structure (packages and markup)
+    const templateData = {
+        packages: JSON.parse(JSON.stringify(state.packages)),
+        globalMarkupPercent: state.globalMarkupPercent,
+        savedAt: new Date().toISOString()
+    };
+    
+    state.templates[templateName] = templateData;
+    debouncedSave();
+    showSaveStatus('Template saved');
+    updateTemplateDropdown();
+}
+
+function loadTemplate(templateName) {
+    if (!state.templates[templateName]) {
+        alert('Template not found');
+        return;
+    }
+    
+    // Warn user that current estimate will be replaced
+    if (!confirm('Loading this template will replace your current estimate. Continue?')) {
+        return;
+    }
+    
+    saveToHistory();
+    
+    const template = state.templates[templateName];
+    state.packages = JSON.parse(JSON.stringify(template.packages));
+    state.globalMarkupPercent = template.globalMarkupPercent;
+    
+    // Reset next IDs and recalculate
+    state.nextItemId = 1;
+    state.nextNestedMemberId = 1;
+    state.packages.forEach(pkg => {
+        if (pkg.id >= state.nextPackageId) state.nextPackageId = pkg.id + 1;
+        if (pkg.items) {
+            pkg.items.forEach(item => {
+                if (item.id >= state.nextItemId) state.nextItemId = item.id + 1;
+                if (item.teamMembers) {
+                    item.teamMembers.forEach(member => {
+                        if (member.id >= state.nextNestedMemberId) state.nextNestedMemberId = member.id + 1;
+                    });
+                }
+            });
+        }
+    });
+    
+    document.getElementById('globalMarkup').value = state.globalMarkupPercent;
+    render();
+    updateAllCalculations();
+    debouncedSave();
+    showSaveStatus('Template loaded');
+}
+
+function deleteTemplate(templateName) {
+    if (!confirm(`Delete template "${templateName}"?`)) return;
+    delete state.templates[templateName];
+    debouncedSave();
+    updateTemplateDropdown();
+    showSaveStatus('Template deleted');
+}
+
+function updateTemplateDropdown() {
+    const dropdown = document.getElementById('templateSelect');
+    if (!dropdown) return;
+    
+    dropdown.innerHTML = '<option value="">Select template...</option>';
+    Object.keys(state.templates).forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        dropdown.appendChild(option);
+    });
+}
+
+/* ============================================
+   CLIENT HISTORY MANAGEMENT
+   ============================================ */
+function saveToClientHistory(clientName) {
+    if (!clientName.trim()) {
+        alert('Please enter a client name');
+        return;
+    }
+    
+    if (!state.clients[clientName]) {
+        state.clients[clientName] = [];
+    }
+    
+    const clientEntry = {
+        projectName: state.projectName,
+        packages: JSON.parse(JSON.stringify(state.packages)),
+        globalMarkupPercent: state.globalMarkupPercent,
+        savedAt: new Date().toISOString()
+    };
+    
+    state.clients[clientName].push(clientEntry);
+    debouncedSave();
+    showSaveStatus(`Saved to ${clientName}`);
+    updateClientDropdown();
+}
+
+function loadClientHistory(clientName, index) {
+    if (!state.clients[clientName] || !state.clients[clientName][index]) {
+        alert('Client history not found');
+        return;
+    }
+    
+    // Warn user that current estimate will be replaced
+    if (!confirm('Loading this project will replace your current estimate. Continue?')) {
+        return;
+    }
+    
+    saveToHistory();
+    
+    const entry = state.clients[clientName][index];
+    state.projectName = entry.projectName;
+    state.packages = JSON.parse(JSON.stringify(entry.packages));
+    state.globalMarkupPercent = entry.globalMarkupPercent;
+    
+    document.getElementById('projectName').value = state.projectName;
+    document.getElementById('globalMarkup').value = state.globalMarkupPercent;
+    render();
+    updateAllCalculations();
+    debouncedSave();
+    showSaveStatus('Client history loaded');
+}
+
+function updateClientDropdown() {
+    const dropdown = document.getElementById('clientSelect');
+    if (!dropdown) return;
+    
+    dropdown.innerHTML = '<option value="">Select client...</option>';
+    const clientNames = Object.keys(state.clients);
+    clientNames.forEach(clientName => {
+        const option = document.createElement('option');
+        option.value = clientName;
+        option.textContent = clientName;
+        dropdown.appendChild(option);
+    });
+}
+
+function showClientProjects(clientName) {
+    const projectSelect = document.getElementById('projectSelect');
+    const projectRow = document.getElementById('projectRow');
+    
+    if (!projectSelect || !projectRow) return;
+    
+    projectRow.style.display = 'flex';
+    projectSelect.innerHTML = '<option value="">Select project...</option>';
+    
+    if (state.clients[clientName]) {
+        state.clients[clientName].forEach((entry, idx) => {
+            const date = new Date(entry.savedAt).toLocaleDateString();
+            const projectName = entry.projectName || 'Untitled';
+            const option = document.createElement('option');
+            option.value = `${clientName}|${idx}`;
+            option.textContent = `${projectName} (${date})`;
+            projectSelect.appendChild(option);
+        });
+    }
+}
+
+function deleteClientHistory(clientName) {
+    if (!confirm(`Delete all history for "${clientName}"?`)) return;
+    delete state.clients[clientName];
+    debouncedSave();
+    updateClientDropdown();
+    showSaveStatus('Client history deleted');
+}
+
+
+
+/* ============================================
    CALCULATIONS
    ============================================ */
 function calculateBaseAmount(item) {
@@ -206,6 +410,34 @@ function calculateMarkupAmount(item) {
     const base = calculateBaseAmount(item);
     const markupPercent = state.globalMarkupPercent / 100;
     return base * markupPercent;
+}
+
+function calculatePackageTotals(packageId) {
+    const pkg = findPackage(packageId);
+    if (!pkg) return { base: 0, markup: 0, final: 0, profit: 0, margin: 0 };
+    
+    let baseTotal = 0;
+    let markupTotal = 0;
+    
+    pkg.items.forEach(item => {
+        const itemBase = calculateBaseAmount(item);
+        const itemMarkup = calculateMarkupAmount(item);
+        baseTotal += itemBase;
+        markupTotal += itemMarkup;
+    });
+    
+    const finalTotal = baseTotal + markupTotal;
+    const costBasis = pkg.costBasis || 0;
+    const profit = finalTotal - costBasis;
+    const margin = finalTotal > 0 ? (profit / finalTotal) * 100 : 0;
+    
+    return {
+        base: baseTotal,
+        markup: markupTotal,
+        final: finalTotal,
+        profit: profit,
+        margin: margin
+    };
 }
 
 /* ============================================
@@ -308,7 +540,8 @@ function addPackage() {
         state.packages.push({
             id: state.nextPackageId++,
             name: name.trim(),
-            items: []
+            items: [],
+            costBasis: 0
         });
         render();
         updateAllCalculations();
@@ -545,6 +778,14 @@ function createPackageElement(pkg, index) {
             </div>
         </div>
 
+        <div class="package-cost-basis" style="display: ${state.globalShowMargin ? 'block' : 'none'}">
+            <label for="cost-basis-${pkg.id}">Hard Costs</label>
+            <div class="input-with-prefix">
+                <span class="input-prefix">$</span>
+                <input type="number" id="cost-basis-${pkg.id}" class="cost-basis-input" data-package-id="${pkg.id}" min="0" step="0.01" value="${pkg.costBasis || 0}" placeholder="0.00" aria-label="Hard costs for ${pkg.name}">
+            </div>
+        </div>
+
         <div class="package-totals" aria-live="polite" aria-atomic="true">
             <div class="totals-row">
                 <span class="totals-label">Base Total</span>
@@ -557,6 +798,10 @@ function createPackageElement(pkg, index) {
             <div class="totals-row final">
                 <span class="totals-label">Final Total</span>
                 <span class="totals-value" id="final-total-${pkg.id}">$0.00</span>
+            </div>
+            <div class="totals-row margin-row" id="margin-row-${pkg.id}" style="display: ${state.globalShowMargin ? 'flex' : 'none'}">
+                <span class="totals-label">Margin</span>
+                <span class="totals-value" id="margin-total-${pkg.id}">--%</span>
             </div>
         </div>
     `;
@@ -793,16 +1038,23 @@ function updateAllCalculations() {
             }
         }
 
+        const finalTotal = baseTotal + markupTotal;
+        const costBasis = pkg.costBasis || 0;
+        const profit = finalTotal - costBasis;
+        const margin = finalTotal > 0 ? (profit / finalTotal) * 100 : 0;
+
         const baseTotalEl = document.getElementById(`base-total-${pkg.id}`);
         const markupTotalEl = document.getElementById(`markup-total-${pkg.id}`);
         const finalTotalEl = document.getElementById(`final-total-${pkg.id}`);
+        const marginEl = document.getElementById(`margin-total-${pkg.id}`);
 
         if (baseTotalEl) baseTotalEl.textContent = `$${baseTotal.toFixed(2)}`;
         if (markupTotalEl) {
             markupTotalEl.textContent = `$${markupTotal.toFixed(2)}`;
             markupTotalEl.closest('.totals-row').querySelector('.totals-label').textContent = `Markup (${state.globalMarkupPercent}%)`;
         }
-        if (finalTotalEl) finalTotalEl.textContent = `$${(baseTotal + markupTotal).toFixed(2)}`;
+        if (finalTotalEl) finalTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
+        if (marginEl) marginEl.textContent = `${margin.toFixed(1)}%`;
     });
 }
 
@@ -821,7 +1073,7 @@ function downloadItemsAsCSV() {
 
     // Summary section
     rows.push(['=== SUMMARY BY PACKAGE ===']);
-    rows.push(['Package', 'Base Total', 'Markup', 'Final Total']);
+    rows.push(['Package', 'Cost Basis', 'Base Total', 'Markup', 'Final Total', 'Profit', 'Margin %']);
     
     state.packages.forEach(pkg => {
         let baseTotal = 0;
@@ -858,11 +1110,19 @@ function downloadItemsAsCSV() {
             }
         }
 
+        const finalTotal = baseTotal + markupTotal;
+        const costBasis = pkg.costBasis || 0;
+        const profit = finalTotal - costBasis;
+        const margin = finalTotal > 0 ? (profit / finalTotal) * 100 : 0;
+
         rows.push([
             pkg.name,
+            formatCurrency(costBasis),
             formatCurrency(baseTotal),
             formatCurrency(markupTotal),
-            formatCurrency(baseTotal + markupTotal)
+            formatCurrency(finalTotal),
+            formatCurrency(profit),
+            `${margin.toFixed(1)}%`
         ]);
     });
 
@@ -996,22 +1256,29 @@ function hideResetConfirmation() {
 function resetEverything() {
     saveToHistory();
     
-    // Reset to initial state
+    // Preserve templates and clients
+    const savedTemplates = state.templates;
+    const savedClients = state.clients;
+    
+    // Reset to initial state but keep templates and clients
     state = {
         projectName: '',
         packages: [
-            { id: 1, name: 'Good', items: [] },
-            { id: 2, name: 'Better', items: [] },
-            { id: 3, name: 'Best', items: [] }
+            { id: 1, name: 'Good', items: [], costBasis: 0 },
+            { id: 2, name: 'Better', items: [], costBasis: 0 },
+            { id: 3, name: 'Best', items: [], costBasis: 0 }
         ],
         globalMarkupPercent: 20,
+        globalShowMargin: true,
         nextPackageId: 4,
         nextItemId: 1,
-        nextNestedMemberId: 1
+        nextNestedMemberId: 1,
+        templates: savedTemplates,
+        clients: savedClients
     };
     
-    // Clear localStorage
-    localStorage.removeItem(STORAGE_KEY);
+    // Save updated state (preserving templates/clients)
+    debouncedSave();
     
     // Update UI
     document.getElementById('projectName').value = '';
@@ -1045,6 +1312,13 @@ function loadStateFromJSON(event) {
             if (state.nextPackageId === undefined) state.nextPackageId = 4;
             if (state.nextItemId === undefined) state.nextItemId = 1;
             if (state.nextNestedMemberId === undefined) state.nextNestedMemberId = 1;
+            if (state.templates === undefined) state.templates = {};
+            if (state.clients === undefined) state.clients = {};
+
+            // Ensure all packages have new fields
+            state.packages.forEach(pkg => {
+                if (pkg.costBasis === undefined) pkg.costBasis = 0;
+            });
 
             // Update project name input field
             document.getElementById('projectName').value = state.projectName;
@@ -1089,6 +1363,7 @@ function loadStateFromJSON(event) {
    ============================================ */
 function render() {
     const grid = document.getElementById('packagesGrid');
+    if (!grid) return;
     grid.innerHTML = '';
     state.packages.forEach((pkg, index) => {
         const pkgEl = createPackageElement(pkg, index);
@@ -1101,6 +1376,9 @@ function render() {
    ============================================ */
 function attachEventListeners() {
     const grid = document.getElementById('packagesGrid');
+    if (!grid) {
+        return;
+    }
     
     // Click event delegation
     grid.addEventListener('click', e => {
@@ -1192,15 +1470,178 @@ function attachEventListeners() {
             const value = e.target.dataset.field === 'name' ? e.target.value : parseFloat(e.target.value) || 0;
             updateNestedTeamMember(packageId, itemId, memberId, field, value);
         }
+
+        if (e.target.classList.contains('cost-basis-input')) {
+            const packageId = parseInt(e.target.dataset.packageId);
+            const value = parseFloat(e.target.value) || 0;
+            const pkg = findPackage(packageId);
+            if (pkg && pkg.costBasis !== value) {
+                saveToHistory();
+                pkg.costBasis = value;
+                updateAllCalculations();
+                debouncedSave();
+            }
+        }
+
     });
 
+    // Global margin toggle listener
+    const globalMarginToggle = document.getElementById('globalMarginToggle');
+    if (globalMarginToggle) {
+        globalMarginToggle.addEventListener('change', (e) => {
+            saveToHistory();
+            state.globalShowMargin = e.target.checked;
+            render();
+            debouncedSave();
+        });
+    }
+    
+    // Library panel toggle
+    const libraryToggle = document.getElementById('libraryToggle');
+    const libraryPanel = document.getElementById('libraryPanel');
+    if (libraryToggle && libraryPanel) {
+        libraryToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            libraryPanel.toggleAttribute('hidden');
+            // Close dropdown menu if open
+            const dropdownMenu = document.getElementById('dropdownMenu');
+            if (dropdownMenu) dropdownMenu.setAttribute('hidden', '');
+        });
+        
+        // Close library panel when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.library-dropdown')) {
+                libraryPanel.setAttribute('hidden', '');
+            }
+        });
+    }
+    
+    // Dropdown menu toggle
+    const menuToggle = document.getElementById('menuToggle');
+    const dropdownMenu = document.getElementById('dropdownMenu');
+    if (menuToggle && dropdownMenu) {
+        menuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownMenu.toggleAttribute('hidden');
+            // Close library panel if open
+            if (libraryPanel) libraryPanel.setAttribute('hidden', '');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.dropdown-menu')) {
+                dropdownMenu.setAttribute('hidden', '');
+            }
+        });
+    }
+    
+    // Template controls
+    const templateSelect = document.getElementById('templateSelect');
+    if (templateSelect) {
+        templateSelect.addEventListener('change', (e) => {
+            if (e.target.value) {
+                loadTemplate(e.target.value);
+                e.target.value = '';
+            }
+        });
+    }
+    
+    const saveTemplateBtn = document.getElementById('saveTemplateBtn');
+    if (saveTemplateBtn) {
+        saveTemplateBtn.addEventListener('click', () => {
+            const name = prompt('Enter template name:');
+            if (name && name.trim()) {
+                saveAsTemplate(name.trim());
+            }
+        });
+    }
+    
+    // Client controls
+    const clientSelect = document.getElementById('clientSelect');
+    const saveToClientBtn = document.getElementById('saveToClientBtn');
+    
+    if (clientSelect) {
+        clientSelect.addEventListener('change', (e) => {
+            if (e.target.value) {
+                showClientProjects(e.target.value);
+                // Enable save to client button when client is selected
+                if (saveToClientBtn) {
+                    saveToClientBtn.disabled = false;
+                    saveToClientBtn.textContent = `Save to ${e.target.value}`;
+                }
+            } else {
+                // Disable button when no client selected
+                if (saveToClientBtn) {
+                    saveToClientBtn.disabled = true;
+                    saveToClientBtn.textContent = 'Save to Client';
+                }
+                const projectRow = document.getElementById('projectRow');
+                if (projectRow) projectRow.style.display = 'none';
+            }
+        });
+    }
+    
+    const newClientBtn = document.getElementById('newClientBtn');
+    if (newClientBtn) {
+        newClientBtn.addEventListener('click', () => {
+            const name = prompt('Enter new client name:');
+            if (name && name.trim()) {
+                saveToClientHistory(name.trim());
+                // Select the newly created client
+                if (clientSelect) {
+                    clientSelect.value = name.trim();
+                    if (saveToClientBtn) {
+                        saveToClientBtn.disabled = false;
+                        saveToClientBtn.textContent = `Save to ${name.trim()}`;
+                    }
+                }
+            }
+        });
+    }
+    
+    if (saveToClientBtn) {
+        saveToClientBtn.addEventListener('click', () => {
+            const selectedClient = clientSelect ? clientSelect.value : '';
+            if (selectedClient) {
+                saveToClientHistory(selectedClient);
+            }
+        });
+    }
+    
+    const projectSelect = document.getElementById('projectSelect');
+    if (projectSelect) {
+        projectSelect.addEventListener('change', (e) => {
+            if (e.target.value) {
+                const [clientName, index] = e.target.value.split('|');
+                loadClientHistory(clientName, parseInt(index));
+                e.target.value = '';
+                const projectRow = document.getElementById('projectRow');
+                if (projectRow) projectRow.style.display = 'none';
+                const libraryPanel = document.getElementById('libraryPanel');
+                if (libraryPanel) libraryPanel.setAttribute('hidden', '');
+                // Reset client select
+                if (clientSelect) clientSelect.value = '';
+                if (saveToClientBtn) {
+                    saveToClientBtn.disabled = true;
+                    saveToClientBtn.textContent = 'Save to Client';
+                }
+            }
+        });
+    }
+
     // Global markup listener
-    document.getElementById('globalMarkup').addEventListener('input', updateGlobalMarkup);
+    const globalMarkupEl = document.getElementById('globalMarkup');
+    if (globalMarkupEl) {
+        globalMarkupEl.addEventListener('input', updateGlobalMarkup);
+    }
     
     // Project name listener
-    document.getElementById('projectName').addEventListener('input', (e) => {
-        updateProjectName(e.target.value);
-    });
+    const projectNameEl = document.getElementById('projectName');
+    if (projectNameEl) {
+        projectNameEl.addEventListener('input', (e) => {
+            updateProjectName(e.target.value);
+        });
+    }
     
     // Export buttons
     document.getElementById('downloadCsv').addEventListener('click', downloadItemsAsCSV);
@@ -1269,10 +1710,20 @@ function init() {
     
     attachEventListeners();
     
+    // Initialize templates and clients dropdowns
+    updateTemplateDropdown();
+    updateClientDropdown();
+    
     if (loaded) {
         // Sync UI with loaded state
-        document.getElementById('projectName').value = state.projectName;
-        document.getElementById('globalMarkup').value = state.globalMarkupPercent;
+        const projectNameEl = document.getElementById('projectName');
+        if (projectNameEl) projectNameEl.value = state.projectName;
+        
+        const markupEl = document.getElementById('globalMarkup');
+        if (markupEl) markupEl.value = state.globalMarkupPercent;
+        
+        const globalMarginToggle = document.getElementById('globalMarginToggle');
+        if (globalMarginToggle) globalMarginToggle.checked = state.globalShowMargin;
     }
     
     render();

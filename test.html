@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quick Test</title>
+</head>
+<body>
+    <h1>App Structure Test</h1>
+    <p>Open index.html and check the browser console for any errors.</p>
+    <p>Test the following:</p>
+    <ol>
+        <li>Click the menu button (⋮) - should show dropdown menu</li>
+        <li>Check the "Margin %" checkbox - should hide/show cost basis fields</li>
+        <li>Add some items to packages</li>
+        <li>Try saving a template from the dropdown menu</li>
+        <li>Try loading the template from the Library section dropdown</li>
+        <li>Try saving a client from the Library section</li>
+        <li>Try selecting a client - should show project dropdown</li>
+        <li>Try loading a client project</li>
+    </ol>
+    <script>
+        // Quick validation of key IDs
+        const requiredIds = [
+            'globalMarginToggle',
+            'menuToggle',
+            'dropdownMenu',
+            'templateSelectTop',
+            'clientSelectTop',
+            'projectSelectTop',
+            'saveClientTopBtn',
+            'downloadCsv',
+            'saveTemplateBtn',
+            'downloadJson',
+            'jsonUpload',
+            'resetAll'
+        ];
+        
+        console.log('Page loaded. Required element IDs:');
+        requiredIds.forEach(id => {
+            const exists = !!document.getElementById(id);
+            console.log(`  ${id}: ${exists ? '✓' : '✗ MISSING'}`);
+        });
+    </script>
+</body>
+</html>

@@ -75,8 +75,9 @@
                     <div class="dropdown-content" id="dropdownMenu" hidden>
                         <button id="downloadCsv">Download CSV</button>
                         <button id="downloadJson">Download JSON</button>
+                        <button id="downloadSimpleText">Text Export</button>
                         <label class="file-upload-inline">
-                            <span>Upload Json</span>
+                            <span>Upload JSON</span>
                             <input type="file" id="jsonUpload" accept="application/json" class="visually-hidden">
                         </label>
                         <button class="btn-danger-menu" id="resetAll">Reset All</button>
@@ -120,6 +121,19 @@
                 <div class="modal-actions">
                     <button class="btn" id="cancelReset">Cancel</button>
                     <button class="btn btn-danger" id="confirmReset">Yes, Reset Everything</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes Modal -->
+        <div class="modal-overlay" id="notesModal" role="dialog" aria-modal="true" aria-labelledby="notes-modal-title" hidden>
+            <div class="modal-content notes-modal-content">
+                <h2 id="notes-modal-title" class="modal-title">Deliverable Notes</h2>
+                <p class="notes-deliverable-name" id="notesDeliverableName"></p>
+                <textarea id="notesTextarea" rows="10" placeholder="Add notes, scope details, requirements, etc..." aria-label="Deliverable notes"></textarea>
+                <div class="modal-actions">
+                    <button class="btn" id="cancelNotes">Cancel</button>
+                    <button class="btn btn-primary" id="saveNotes">Save Notes</button>
                 </div>
             </div>
         </div>

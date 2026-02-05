@@ -1764,3 +1764,157 @@ input[type="number"] {
         display: block !important;
     }
 }
+
+/* ============================================
+   NOTES BUTTON & MODAL
+   ============================================ */
+.btn-notes {
+    padding: var(--space-8) var(--space-16);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-notes:hover {
+    background: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.btn-notes:active {
+    transform: scale(0.98);
+}
+
+.notes-modal-content {
+    max-width: 600px;
+}
+
+.notes-deliverable-name {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-16);
+    font-weight: 500;
+}
+
+#notesTextarea {
+    width: 100%;
+    padding: var(--space-12);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 200px;
+}
+
+#notesTextarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-focus);
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--color-primary-hover);
+}
+
+/* ============================================
+   DRAG AND DROP STYLES
+   ============================================ */
+.draggable-item {
+    cursor: move;
+    transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.draggable-item.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.drop-zone {
+    min-height: 60px;
+    border: 2px dashed transparent;
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+}
+
+.drop-zone.drag-over,
+[id^="items-"].drag-over {
+    border: 2px dashed var(--color-primary);
+    background-color: var(--color-primary-light);
+    border-radius: var(--radius-base);
+    padding: var(--space-8);
+    min-height: 80px;
+}
+
+.hourly-product-container,
+.collapsible-container {
+    position: relative;
+}
+
+.hourly-product-container::before,
+.collapsible-container::before {
+    content: '⋮⋮';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-border-strong);
+    font-size: 16px;
+    line-height: 0.8;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+    pointer-events: none;
+}
+
+.hourly-product-container:hover::before,
+.collapsible-container:hover::before {
+    opacity: 1;
+}
+
+.draggable-item .hourly-product-header,
+.draggable-item .collapsible-header {
+    padding-left: 32px;
+}
+
+.drag-insertion-indicator {
+    height: 3px;
+    background-color: var(--color-primary);
+    border-radius: 2px;
+    margin: 4px 0;
+    transition: all var(--transition-fast);
+    box-shadow: 0 0 8px var(--color-primary);
+}
+
+.notes-indicator {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 14px;
+    opacity: 0.7;
+    transition: opacity var(--transition-fast);
+}
+
+.hourly-product-header:hover .notes-indicator,
+.collapsible-header:hover .notes-indicator {
+    opacity: 1;
+}
+
+.draggable-item.drag-over-top {
+    border-top: 2px solid var(--color-primary);
+    margin-top: 4px;
+}
+
+.draggable-item.drag-over-bottom {
+    border-bottom: 2px solid var(--color-primary);
+    margin-bottom: 4px;
+}

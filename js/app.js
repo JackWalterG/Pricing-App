@@ -135,6 +135,11 @@ function loadFromLocalStorage() {
                 // Ensure all packages have new fields
                 state.packages.forEach(pkg => {
                     if (pkg.costBasis === undefined) pkg.costBasis = 0;
+                    if (pkg.items) {
+                        pkg.items.forEach(item => {
+                            if (item.notes === undefined) item.notes = '';
+                        });
+                    }
                 });
                 
                 // Recalculate max IDs
@@ -199,6 +204,87 @@ function findItem(packageId, itemId) {
 
 function formatCurrency(value) {
     return `$${parseFloat(value).toFixed(2)}`;
+}
+
+/* ============================================
+   NOTES MANAGEMENT
+   ============================================ */
+let currentNotesContext = { packageId: null, itemId: null };
+
+function showNotesModal(packageId, itemId) {
+    const item = findItem(packageId, itemId);
+    if (!item) return;
+    
+    currentNotesContext = { packageId, itemId };
+    
+    const modal = document.getElementById('notesModal');
+    const nameEl = document.getElementById('notesDeliverableName');
+    const textarea = document.getElementById('notesTextarea');
+    
+    nameEl.textContent = item.name || 'Untitled Deliverable';
+    textarea.value = item.notes || '';
+    
+    modal.hidden = false;
+    textarea.focus();
+    document.body.style.overflow = 'hidden';
+}
+
+function hideNotesModal() {
+    const modal = document.getElementById('notesModal');
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    currentNotesContext = { packageId: null, itemId: null };
+}
+
+function saveNotes() {
+    const { packageId, itemId } = currentNotesContext;
+    if (packageId === null || itemId === null) return;
+    
+    const item = findItem(packageId, itemId);
+    if (!item) return;
+    
+    const textarea = document.getElementById('notesTextarea');
+    const newNotes = textarea.value.trim();
+    
+    if (item.notes !== newNotes) {
+        saveToHistory();
+        item.notes = newNotes;
+        
+        // Update notes button text
+        const btn = document.querySelector(`[data-item-id="${itemId}"].btn-notes`);
+        if (btn) {
+            btn.textContent = newNotes ? 'Details ✓' : 'Details';
+        }
+        
+        // Update the notes indicator in the header
+        const hourlyContainer = document.querySelector(`[data-hourly-id="${itemId}"]`);
+        const flatContainer = document.querySelector(`[data-flat-id="${itemId}"]`);
+        const container = hourlyContainer || flatContainer;
+        
+        if (container) {
+            const summaryEl = container.querySelector('.hourly-product-summary, .collapsible-summary');
+            if (summaryEl) {
+                // Remove existing indicator if present
+                const existingIndicator = summaryEl.querySelector('.notes-indicator');
+                if (existingIndicator) {
+                    existingIndicator.remove();
+                }
+                
+                // Add indicator if notes exist
+                if (newNotes) {
+                    const indicator = document.createElement('span');
+                    indicator.className = 'notes-indicator';
+                    indicator.title = 'Has details';
+                    indicator.textContent = '📝';
+                    summaryEl.appendChild(indicator);
+                }
+            }
+        }
+        
+        debouncedSave();
+    }
+    
+    hideNotesModal();
 }
 
 /* ============================================
@@ -428,7 +514,7 @@ function calculatePackageTotals(packageId) {
     
     const finalTotal = baseTotal + markupTotal;
     const costBasis = pkg.costBasis || 0;
-    const profit = finalTotal - costBasis;
+    const profit = finalTotal - costBasis - baseTotal;
     const margin = finalTotal > 0 ? (profit / finalTotal) * 100 : 0;
     
     return {
@@ -573,7 +659,8 @@ function addItem(packageId, type) {
             name: '',
             hourlyRate: 0,
             hours: 0,
-            price: 0
+            price: 0,
+            notes: ''
         };
         if (type === 'hourly-product') {
             newItem.teamMembers = [];
@@ -581,7 +668,6 @@ function addItem(packageId, type) {
         pkg.items.push(newItem);
         renderItemsForPackage(packageId);
         updateEmptyStates();
-        updateInheritedItemsDisplay();
         updateAllCalculations();
         debouncedSave();
     }
@@ -610,11 +696,6 @@ function updateItem(packageId, itemId, field, value) {
                 if (summary) summary.textContent = value || 'Untitled Product';
             }
 
-            // Update inherited items display when name changes
-            if (field === 'name') {
-                updateInheritedItemsDisplay();
-            }
-
             // Update flat product totals display
             if (item.type === 'flat-product' && field === 'price') {
                 const summaryEl = document.getElementById(`flat-summary-${itemId}`);
@@ -639,7 +720,6 @@ function removeItem(packageId, itemId) {
         pkg.items = pkg.items.filter(i => i.id !== itemId);
         renderItemsForPackage(packageId);
         updateEmptyStates();
-        updateInheritedItemsDisplay();
         updateAllCalculations();
         debouncedSave();
     }
@@ -741,14 +821,6 @@ function createPackageElement(pkg, index) {
     if (pkg.name === 'Better') tierHint = '(includes Good)';
     if (pkg.name === 'Best') tierHint = '(includes Good + Better)';
 
-    let inheritedHtml = '';
-    if (pkg.name === 'Better' || pkg.name === 'Best') {
-        const inheritedItems = getInheritedItemNames(pkg.name);
-        if (inheritedItems.length > 0) {
-            inheritedHtml = `<div class="inherited-items" role="note" aria-label="Inherited items"><strong>Inherited:</strong> ${inheritedItems.join(', ')}</div>`;
-        }
-    }
-
     const emptyStateHtml = pkg.items.length === 0 
         ? `<div class="empty-state" role="status">No deliverables yet. Add a flat-rate or hourly item above.</div>` 
         : '';
@@ -757,8 +829,6 @@ function createPackageElement(pkg, index) {
         <header class="package-header">
             <h3 class="package-title">${pkg.name}<span class="tier-hint">${tierHint}</span></h3>
         </header>
-
-        ${inheritedHtml}
 
         <div class="items-section">
             <span class="section-label" id="add-items-label-${pkg.id}">Add Items to ${pkg.name}</span>
@@ -827,21 +897,23 @@ function createItemElement(packageId, item) {
 
 function createHourlyProductElement(packageId, item) {
     const div = document.createElement('div');
-    div.className = 'hourly-product-container';
+    div.className = 'hourly-product-container draggable-item';
     div.setAttribute('data-hourly-id', item.id);
     div.setAttribute('role', 'listitem');
+    div.setAttribute('draggable', 'true');
 
     const base = calculateHourlyProductBaseAmount(item);
     const markup = calculateMarkupAmount(item);
     const final = base + markup;
     const itemName = item.name || 'Untitled Hourly Based Deliverable';
     const contentId = `hourly-content-${item.id}`;
+    const hasNotes = item.notes && item.notes.trim().length > 0;
 
     div.innerHTML = `
         <button class="hourly-product-header" aria-expanded="false" aria-controls="${contentId}">
             <div class="hourly-product-header-main">
                 <span class="hourly-product-toggle" aria-hidden="true">▶</span>
-                <span class="hourly-product-summary">${itemName}</span>
+                <span class="hourly-product-summary">${itemName}${hasNotes ? '<span class="notes-indicator" title="Has details">📝</span>' : ''}</span>
             </div>
             <span class="hourly-product-totals">
                 <span id="hourly-summary-${item.id}">Base: $${base.toFixed(2)} · Markup: $${markup.toFixed(2)} · Total: $${final.toFixed(2)}</span>
@@ -867,6 +939,12 @@ function createHourlyProductElement(packageId, item) {
                 </button>
             </div>
 
+            <div style="display: flex; gap: var(--space-8); margin-bottom: var(--space-12);">
+                <button class="btn-notes" data-package-id="${packageId}" data-item-id="${item.id}" aria-label="Edit notes for ${itemName}">
+                    Details${item.notes ? ' ✓' : ''}
+                </button>
+            </div>
+
             <button class="btn-remove-item" data-package-id="${packageId}" data-item-id="${item.id}" aria-label="Remove ${itemName}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 Remove Deliverable
@@ -886,21 +964,23 @@ function createHourlyProductElement(packageId, item) {
 
 function createFlatProductElement(packageId, item) {
     const div = document.createElement('div');
-    div.className = 'collapsible-container';
+    div.className = 'collapsible-container draggable-item';
     div.setAttribute('data-flat-id', item.id);
     div.setAttribute('role', 'listitem');
+    div.setAttribute('draggable', 'true');
 
     const base = item.price ? item.price : 0;
     const markup = calculateMarkupAmount(item);
     const final = base + markup;
     const itemName = item.name || 'Untitled Flat Rate Deliverable';
     const contentId = `flat-content-${item.id}`;
+    const hasNotes = item.notes && item.notes.trim().length > 0;
 
     div.innerHTML = `
         <button class="collapsible-header" aria-expanded="false" aria-controls="${contentId}">
             <div class="collapsible-header-main">
                 <span class="collapsible-toggle" aria-hidden="true">▶</span>
-                <span class="collapsible-summary">${itemName}</span>
+                <span class="collapsible-summary">${itemName}${hasNotes ? '<span class="notes-indicator" title="Has details">📝</span>' : ''}</span>
             </div>
             <span class="collapsible-totals">
                 <span id="flat-summary-${item.id}">Base: $${base.toFixed(2)} · Total: $${final.toFixed(2)}</span>
@@ -923,6 +1003,12 @@ function createFlatProductElement(packageId, item) {
                         <span class="input-suffix" style="left: 12px; right: auto;">$</span>
                     </div>
                 </div>
+            </div>
+
+            <div style="display: flex; gap: var(--space-8); margin-bottom: var(--space-12);">
+                <button class="btn-notes" data-package-id="${packageId}" data-item-id="${item.id}" aria-label="Edit notes for ${itemName}">
+                    Details${item.notes ? ' ✓' : ''}
+                </button>
             </div>
 
             <button class="btn-remove-item" data-package-id="${packageId}" data-item-id="${item.id}" aria-label="Remove ${itemName}">
@@ -1040,7 +1126,7 @@ function updateAllCalculations() {
 
         const finalTotal = baseTotal + markupTotal;
         const costBasis = pkg.costBasis || 0;
-        const profit = finalTotal - costBasis;
+        const profit = finalTotal - costBasis - baseTotal;
         const margin = finalTotal > 0 ? (profit / finalTotal) * 100 : 0;
 
         const baseTotalEl = document.getElementById(`base-total-${pkg.id}`);
@@ -1112,7 +1198,7 @@ function downloadItemsAsCSV() {
 
         const finalTotal = baseTotal + markupTotal;
         const costBasis = pkg.costBasis || 0;
-        const profit = finalTotal - costBasis;
+        const profit = finalTotal - costBasis - baseTotal;
         const margin = finalTotal > 0 ? (profit / finalTotal) * 100 : 0;
 
         rows.push([
@@ -1203,6 +1289,24 @@ function downloadItemsAsCSV() {
         });
     });
 
+    rows.push([]);
+
+    // Notes section
+    rows.push(['=== DELIVERABLE NOTES ===']);
+    rows.push(['Package', 'Deliverable', 'Notes']);
+
+    state.packages.forEach(pkg => {
+        pkg.items.forEach(item => {
+            if (item.notes && item.notes.trim()) {
+                rows.push([
+                    pkg.name,
+                    item.name || 'Untitled',
+                    item.notes
+                ]);
+            }
+        });
+    });
+
     // Convert to CSV
     const csv = rows.map((row, rowIndex) => {
         return row.map((v, colIndex) => {
@@ -1235,6 +1339,50 @@ function downloadStateAsJSON() {
     document.body.appendChild(a);
     a.click();
     a.remove();
+}
+
+function downloadSimpleText() {
+    const lines = [''];
+    
+    // Process each package tier
+    ['Good', 'Better', 'Best'].forEach((tierName, index) => {
+        const pkg = state.packages.find(p => p.name === tierName);
+        if (!pkg) return;
+        
+        // Add tier header in uppercase
+        lines.push(tierName.toUpperCase());
+        
+        // Only show items specific to this tier (not inherited)
+        pkg.items.forEach((item, itemIndex) => {
+            lines.push(item.name || 'Untitled');
+            if (item.notes && item.notes.trim()) {
+                lines.push(item.notes.trim());
+            }
+            // Add blank line after each deliverable except the last one
+            if (itemIndex < pkg.items.length - 1) {
+                lines.push('');
+            }
+        });
+        
+        // Add extra blank lines between tiers (except after the last one)
+        if (index < 2) {
+            lines.push('');
+            lines.push('');
+        }
+    });
+    
+    // Create and download the file
+    const text = lines.join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const projectSlug = state.projectName ? state.projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : 'untitled';
+    a.download = `${projectSlug}-simple-text-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
 }
 
 function showResetConfirmation() {
@@ -1318,6 +1466,11 @@ function loadStateFromJSON(event) {
             // Ensure all packages have new fields
             state.packages.forEach(pkg => {
                 if (pkg.costBasis === undefined) pkg.costBasis = 0;
+                if (pkg.items) {
+                    pkg.items.forEach(item => {
+                        if (item.notes === undefined) item.notes = '';
+                    });
+                }
             });
 
             // Update project name input field
@@ -1359,6 +1512,237 @@ function loadStateFromJSON(event) {
 }
 
 /* ============================================
+   DRAG AND DROP
+   ============================================ */
+let draggedItem = null;
+let draggedFromPackageId = null;
+
+function enableDragAndDrop() {
+    const grid = document.getElementById('packagesGrid');
+    if (!grid) return;
+
+    // Add dragstart event to items
+    grid.addEventListener('dragstart', (e) => {
+        const itemContainer = e.target.closest('[data-hourly-id], [data-flat-id]');
+        if (!itemContainer) return;
+
+        const itemId = parseInt(itemContainer.dataset.hourlyId || itemContainer.dataset.flatId);
+        const packageEl = itemContainer.closest('.package');
+        const packageId = parseInt(packageEl.querySelector('[data-package-id]').dataset.packageId);
+
+        draggedItem = { itemId, type: itemContainer.dataset.hourlyId ? 'hourly' : 'flat' };
+        draggedFromPackageId = packageId;
+        
+        itemContainer.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', itemContainer.innerHTML);
+    });
+
+    // Add dragend event
+    grid.addEventListener('dragend', (e) => {
+        const itemContainer = e.target.closest('[data-hourly-id], [data-flat-id]');
+        if (itemContainer) {
+            itemContainer.classList.remove('dragging');
+        }
+        
+        // Clean up drag-over states
+        document.querySelectorAll('.drag-over').forEach(el => {
+            el.classList.remove('drag-over');
+        });
+        
+        // Clean up insertion indicators
+        document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
+            el.classList.remove('drag-over-top', 'drag-over-bottom');
+        });
+        
+        draggedItem = null;
+        draggedFromPackageId = null;
+    });
+
+    // Add dragover event to drop zones
+    grid.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const dropZone = e.target.closest('.items-section');
+        if (dropZone && draggedItem) {
+            e.dataTransfer.dropEffect = 'move';
+            
+            // Add visual feedback to the container
+            const itemsContainer = dropZone.querySelector('[id^="items-"]');
+            if (itemsContainer) {
+                itemsContainer.classList.add('drag-over');
+            }
+            
+            // Show insertion indicator on specific items
+            const targetItem = e.target.closest('[data-hourly-id], [data-flat-id]');
+            if (targetItem) {
+                const targetRect = targetItem.getBoundingClientRect();
+                const targetMiddle = targetRect.top + targetRect.height / 2;
+                
+                // Remove previous indicators
+                document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
+                    el.classList.remove('drag-over-top', 'drag-over-bottom');
+                });
+                
+                // Add indicator based on position
+                if (e.clientY < targetMiddle) {
+                    targetItem.classList.add('drag-over-top');
+                } else {
+                    targetItem.classList.add('drag-over-bottom');
+                }
+            }
+        }
+    });
+
+    // Add dragenter event
+    grid.addEventListener('dragenter', (e) => {
+        const dropZone = e.target.closest('.items-section');
+        if (dropZone && draggedItem) {
+            const itemsContainer = dropZone.querySelector('[id^="items-"]');
+            if (itemsContainer) {
+                itemsContainer.classList.add('drag-over');
+            }
+        }
+    });
+
+    // Add dragleave event
+    grid.addEventListener('dragleave', (e) => {
+        const dropZone = e.target.closest('.items-section');
+        if (dropZone) {
+            const itemsContainer = dropZone.querySelector('[id^="items-"]');
+            if (itemsContainer && !itemsContainer.contains(e.relatedTarget)) {
+                itemsContainer.classList.remove('drag-over');
+            }
+        }
+    });
+
+    // Add drop event
+    grid.addEventListener('drop', (e) => {
+        e.preventDefault();
+        
+        const dropZone = e.target.closest('.items-section');
+        if (!dropZone || !draggedItem) return;
+
+        const targetPackageEl = dropZone.closest('.package');
+        const addButton = targetPackageEl.querySelector('[data-package-id]');
+        const targetPackageId = parseInt(addButton.dataset.packageId);
+
+        // Clean up visual feedback
+        document.querySelectorAll('.drag-over').forEach(el => {
+            el.classList.remove('drag-over');
+        });
+        
+        // Clean up insertion indicators
+        document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
+            el.classList.remove('drag-over-top', 'drag-over-bottom');
+        });
+
+        // Find the drop target position
+        const targetItem = e.target.closest('[data-hourly-id], [data-flat-id]');
+        const itemsContainer = dropZone.querySelector('[id^="items-"]');
+        
+        if (targetPackageId === draggedFromPackageId) {
+            // Reorder within the same package
+            reorderItemInPackage(draggedFromPackageId, draggedItem.itemId, targetItem, itemsContainer, e.clientY);
+        } else {
+            // Move between packages
+            moveItemBetweenPackages(draggedFromPackageId, targetPackageId, draggedItem.itemId, targetItem, itemsContainer, e.clientY);
+        }
+    });
+}
+
+function reorderItemInPackage(packageId, itemId, targetItem, itemsContainer, clientY) {
+    const pkg = findPackage(packageId);
+    if (!pkg) return;
+
+    const itemIndex = pkg.items.findIndex(item => item.id === itemId);
+    if (itemIndex === -1) return;
+
+    const [movedItem] = pkg.items.splice(itemIndex, 1);
+    
+    // Determine insertion position
+    let insertIndex = pkg.items.length;
+    
+    if (targetItem) {
+        const targetItemId = parseInt(targetItem.dataset.hourlyId || targetItem.dataset.flatId);
+        const targetIndex = pkg.items.findIndex(item => item.id === targetItemId);
+        
+        if (targetIndex !== -1) {
+            const targetRect = targetItem.getBoundingClientRect();
+            const targetMiddle = targetRect.top + targetRect.height / 2;
+            
+            // Insert before or after based on cursor position
+            if (clientY < targetMiddle) {
+                insertIndex = targetIndex;
+            } else {
+                insertIndex = targetIndex + 1;
+            }
+        }
+    }
+    
+    saveToHistory();
+    pkg.items.splice(insertIndex, 0, movedItem);
+
+    // Re-render and update
+    render();
+    updateEmptyStates();
+    updateAllCalculations();
+    debouncedSave();
+    
+    // Re-enable drag and drop after re-render
+    enableDragAndDrop();
+    
+    showSaveStatus('Item reordered');
+}
+
+function moveItemBetweenPackages(fromPackageId, toPackageId, itemId, targetItem, itemsContainer, clientY) {
+    const fromPackage = findPackage(fromPackageId);
+    const toPackage = findPackage(toPackageId);
+
+    if (!fromPackage || !toPackage) return;
+
+    // Find and remove the item from the source package
+    const itemIndex = fromPackage.items.findIndex(item => item.id === itemId);
+    if (itemIndex === -1) return;
+
+    saveToHistory();
+    
+    const [movedItem] = fromPackage.items.splice(itemIndex, 1);
+    
+    // Determine insertion position in target package
+    let insertIndex = toPackage.items.length;
+    
+    if (targetItem) {
+        const targetItemId = parseInt(targetItem.dataset.hourlyId || targetItem.dataset.flatId);
+        const targetIndex = toPackage.items.findIndex(item => item.id === targetItemId);
+        
+        if (targetIndex !== -1) {
+            const targetRect = targetItem.getBoundingClientRect();
+            const targetMiddle = targetRect.top + targetRect.height / 2;
+            
+            // Insert before or after based on cursor position
+            if (clientY < targetMiddle) {
+                insertIndex = targetIndex;
+            } else {
+                insertIndex = targetIndex + 1;
+            }
+        }
+    }
+    
+    toPackage.items.splice(insertIndex, 0, movedItem);
+
+    // Re-render and update
+    render();
+    updateEmptyStates();
+    updateAllCalculations();
+    debouncedSave();
+    
+    // Re-enable drag and drop after re-render
+    enableDragAndDrop();
+    
+    showSaveStatus('Item moved');
+}
+
+/* ============================================
    RENDERING
    ============================================ */
 function render() {
@@ -1369,6 +1753,9 @@ function render() {
         const pkgEl = createPackageElement(pkg, index);
         grid.appendChild(pkgEl);
     });
+    
+    // Enable drag and drop after rendering
+    enableDragAndDrop();
 }
 
 /* ============================================
@@ -1442,6 +1829,14 @@ function attachEventListeners() {
             const itemId = parseInt(btn.dataset.itemId);
             const memberId = parseInt(btn.dataset.memberId);
             removeNestedTeamMember(packageId, itemId, memberId);
+            return false;
+        }
+
+        if (e.target.classList.contains('btn-notes') || e.target.closest('.btn-notes')) {
+            const btn = e.target.classList.contains('btn-notes') ? e.target : e.target.closest('.btn-notes');
+            const packageId = parseInt(btn.dataset.packageId);
+            const itemId = parseInt(btn.dataset.itemId);
+            showNotesModal(packageId, itemId);
             return false;
         }
 
@@ -1646,6 +2041,7 @@ function attachEventListeners() {
     // Export buttons
     document.getElementById('downloadCsv').addEventListener('click', downloadItemsAsCSV);
     document.getElementById('downloadJson').addEventListener('click', downloadStateAsJSON);
+    document.getElementById('downloadSimpleText').addEventListener('click', downloadSimpleText);
     document.getElementById('jsonUpload').addEventListener('change', loadStateFromJSON);
     
     // Undo/Redo buttons
@@ -1695,8 +2091,24 @@ function attachEventListeners() {
     });
     
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !document.getElementById('confirmModal').hidden) {
-            hideResetConfirmation();
+        if (e.key === 'Escape') {
+            if (!document.getElementById('confirmModal').hidden) {
+                hideResetConfirmation();
+            }
+            if (!document.getElementById('notesModal').hidden) {
+                hideNotesModal();
+            }
+        }
+    });
+    
+    // Notes modal buttons
+    document.getElementById('saveNotes').addEventListener('click', saveNotes);
+    document.getElementById('cancelNotes').addEventListener('click', hideNotesModal);
+    
+    // Close notes modal on overlay click
+    document.getElementById('notesModal').addEventListener('click', (e) => {
+        if (e.target.id === 'notesModal') {
+            hideNotesModal();
         }
     });
 }

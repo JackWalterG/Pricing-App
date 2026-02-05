@@ -68,6 +68,8 @@
                     </div>
                 </div>
                 
+                <button class="header-btn-primary" id="managePresetsBtn" title="Manage role presets">Manage Presets</button>
+                
                 <div class="header-divider"></div>
                 
                 <div class="dropdown-menu">
@@ -134,6 +136,30 @@
                 <div class="modal-actions">
                     <button class="btn" id="cancelNotes">Cancel</button>
                     <button class="btn btn-primary" id="saveNotes">Save Notes</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manage Presets Modal -->
+        <div class="modal-overlay" id="presetsModal" role="dialog" aria-modal="true" aria-labelledby="presets-modal-title" hidden>
+            <div class="modal-content presets-modal-content">
+                <h2 id="presets-modal-title" class="modal-title">Manage Role Presets</h2>
+                <p class="modal-subtitle">Add custom role presets to quickly populate package elements</p>
+                
+                <div class="presets-list" id="presetsListContainer">
+                    <h3>Industry Standard Roles</h3>
+                    <div class="presets-readonly-list" id="industryRolesList">
+                        <!-- Industry roles will be listed here -->
+                    </div>
+                    
+                    <h3>Custom Roles <button class="btn-small btn-primary" id="addCustomRoleBtn">+ Add New</button></h3>
+                    <div class="presets-custom-list" id="customRolesList">
+                        <!-- Custom roles will be listed here -->
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="btn btn-primary" id="closePresetsBtn">Close</button>
                 </div>
             </div>
         </div>

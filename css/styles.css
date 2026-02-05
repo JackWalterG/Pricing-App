@@ -1140,6 +1140,17 @@ input[type="number"] {
     color: var(--color-success);
 }
 
+.totals-row-custom-markup {
+    font-size: 13px;
+    opacity: 0.85;
+    padding: var(--space-4) 0;
+}
+
+.totals-label-indent {
+    padding-left: var(--space-16);
+    font-weight: 400;
+}
+
 /* ============================================
    PACKAGE COST BASIS & MARGIN
    ============================================ */
@@ -1918,3 +1929,382 @@ input[type="number"] {
     border-bottom: 2px solid var(--color-primary);
     margin-bottom: 4px;
 }
+
+/* Modified industry role indicators */
+.preset-modified {
+    border-left: 3px solid var(--color-accent);
+}
+
+.modified-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    background-color: var(--color-accent);
+    color: white;
+    font-size: 10px;
+    border-radius: 3px;
+    margin-left: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.btn-reset-preset {
+    background-color: #fff3cd;
+    color: #856404;
+    border-color: #ffc107;
+}
+
+.btn-reset-preset:hover {
+    background-color: #ffc107;
+    color: white;
+}
+
+/* ============================================
+   PACKAGE ELEMENT ENHANCEMENTS
+   ============================================ */
+
+/* Role Preset Selector */
+.nested-team-member-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-12);
+    padding: var(--space-8);
+    background-color: var(--color-primary-light);
+    border-radius: var(--radius-sm);
+}
+
+.role-preset-selector {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.role-preset-selector label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.role-preset-select {
+    padding: var(--space-8) var(--space-12);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface);
+    font-size: 14px;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.role-preset-select:hover {
+    border-color: var(--color-border-strong);
+}
+
+.role-preset-select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-focus);
+}
+
+/* Custom Markup Badge */
+.custom-markup-badge {
+    display: inline-block;
+    padding: var(--space-4) var(--space-12);
+    background-color: var(--color-accent);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: var(--radius-base);
+    white-space: nowrap;
+    cursor: help;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* Cost/Sell/Markup Three-Field Layout */
+.cost-sell-markup-fields {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-12);
+    margin-bottom: var(--space-12);
+}
+
+.cost-sell-markup-fields .form-group label {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.cost-sell-markup-fields input[readonly] {
+    background-color: var(--color-background);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Custom Markup Controls */
+.custom-markup-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    margin-bottom: var(--space-12);
+    padding: var(--space-8);
+    background-color: var(--color-background);
+    border-radius: var(--radius-sm);
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    cursor: pointer;
+    font-size: 14px;
+    margin: 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
+.btn-reset-markup {
+    padding: var(--space-4) var(--space-12);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-reset-markup:hover {
+    background-color: var(--color-background);
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+}
+
+/* Package Element Actions */
+.nested-member-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: var(--space-12);
+    border-top: 1px solid var(--color-border);
+}
+
+.nested-member-actions {
+    display: flex;
+    gap: var(--space-8);
+}
+
+.btn-duplicate-nested-member {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-12);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-duplicate-nested-member:hover {
+    background-color: var(--color-primary-light);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.btn-duplicate-nested-member svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* ============================================
+   MANAGE PRESETS MODAL
+   ============================================ */
+.presets-modal-content {
+    max-width: 700px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-subtitle {
+    margin-top: -8px;
+    margin-bottom: var(--space-24);
+    color: var(--color-text-secondary);
+    font-size: 14px;
+}
+
+.presets-list {
+    margin-bottom: var(--space-24);
+}
+
+.presets-list h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin: var(--space-24) 0 var(--space-12) 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.presets-list h3:first-child {
+    margin-top: 0;
+}
+
+.btn-small {
+    padding: var(--space-4) var(--space-12);
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+}
+
+.preset-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-12) var(--space-16);
+    margin-bottom: var(--space-8);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+}
+
+.preset-item:hover {
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-sm);
+}
+
+.preset-readonly {
+    background-color: var(--color-background);
+}
+
+.preset-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.preset-info strong {
+    font-size: 15px;
+    color: var(--color-text);
+}
+
+.preset-info span {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+.preset-actions {
+    display: flex;
+    gap: var(--space-8);
+}
+
+.btn-edit-preset,
+.btn-delete-preset {
+    padding: var(--space-4) var(--space-12);
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: 1px solid transparent;
+}
+
+.btn-edit-preset {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.btn-edit-preset:hover {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.btn-delete-preset {
+    background-color: #fee;
+    color: var(--color-error);
+    border-color: var(--color-error);
+}
+
+.btn-delete-preset:hover {
+    background-color: var(--color-error);
+    color: white;
+}
+
+.empty-state-small {
+    padding: var(--space-16);
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    font-style: italic;
+}
+
+.presets-readonly-list,
+.presets-custom-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Header Button for Manage Presets */
+.header-btn-primary {
+    padding: var(--space-8) var(--space-16);
+    background-color: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-base);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.header-btn-primary:hover {
+    background-color: var(--color-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.header-btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Responsive adjustments for package elements */
+@media (max-width: 768px) {
+    .cost-sell-markup-fields {
+        grid-template-columns: 1fr;
+    }
+    
+    .nested-team-member-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .custom-markup-badge {
+        margin-top: var(--space-8);
+        text-align: center;
+    }
+    
+    .nested-member-footer {
+        flex-direction: column;
+        gap: var(--space-12);
+    }
+    
+    .nested-member-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+

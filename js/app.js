@@ -1,4 +1,20 @@
 /* ============================================
+   INDUSTRY ROLE PRESETS
+   ============================================ */
+const CREATIVE_INDUSTRY_ROLES = [
+    { role: 'Producer', hourlyRate: 105, fullDayRate: 1050, hours: 10 },
+    { role: 'Director', hourlyRate: 185, fullDayRate: 1850, hours: 10 },
+    { role: 'Camera Operator', hourlyRate: 90, fullDayRate: 900, hours: 10 },
+    { role: 'Gaffer', hourlyRate: 78, fullDayRate: 775, hours: 10 },
+    { role: 'Sound Mixer (Labor Only)', hourlyRate: 90, fullDayRate: 900, hours: 10 },
+    { role: 'Editor', hourlyRate: 93, fullDayRate: 925, hours: 10 },
+    { role: 'Sr. Editor', hourlyRate: 150, fullDayRate: 1500, hours: 10 },
+    { role: 'Colorist', hourlyRate: 175, fullDayRate: 1750, hours: 10 },
+    { role: 'Sound Designer', hourlyRate: 115, fullDayRate: 1150, hours: 10 },
+    { role: 'Retoucher', hourlyRate: 80, fullDayRate: 800, hours: 10 }
+];
+
+/* ============================================
    STATE
    ============================================ */
 let state = {
@@ -14,7 +30,9 @@ let state = {
     nextItemId: 1,
     nextNestedMemberId: 1,
     templates: {},
-    clients: {}
+    clients: {},
+    customRoles: [],
+    industryRoleOverrides: {}
 };
 
 /* ============================================
@@ -93,7 +111,7 @@ function syncUIWithState() {
    AUTO-SAVE
    ============================================ */
 const STORAGE_KEY = 'pricingCalculatorState';
-const STORAGE_VERSION = '2.0.0'; // Updated for new features
+const STORAGE_VERSION = '3.0.0'; // Updated for custom markup, role presets, and package element features
 const VERSION_KEY = 'pricingCalculatorVersion';
 
 function saveToLocalStorage() {
@@ -131,6 +149,8 @@ function loadFromLocalStorage() {
                 if (state.nextNestedMemberId === undefined) state.nextNestedMemberId = 1;
                 if (state.templates === undefined) state.templates = {};
                 if (state.clients === undefined) state.clients = {};
+                if (state.customRoles === undefined) state.customRoles = [];
+                if (state.industryRoleOverrides === undefined) state.industryRoleOverrides = {};
                 
                 // Ensure all packages have new fields
                 state.packages.forEach(pkg => {
@@ -138,20 +158,34 @@ function loadFromLocalStorage() {
                     if (pkg.items) {
                         pkg.items.forEach(item => {
                             if (item.notes === undefined) item.notes = '';
+                            // Migrate teamMembers to packageElements
+                            if (item.type === 'hourly-product' && item.teamMembers && !item.packageElements) {
+                                item.packageElements = item.teamMembers;
+                                delete item.teamMembers;
+                            }
                         });
                     }
                 });
                 
-                // Recalculate max IDs
+                // Recalculate max IDs and migrate old data
                 state.packages.forEach(pkg => {
                     if (pkg.id >= state.nextPackageId) state.nextPackageId = pkg.id + 1;
                     if (pkg.items) {
                         pkg.items.forEach(item => {
                             if (item.id >= state.nextItemId) state.nextItemId = item.id + 1;
-                            if (item.type === 'hourly-product' && !item.teamMembers) item.teamMembers = [];
-                            if (item.teamMembers) {
-                                item.teamMembers.forEach(member => {
+                            if (item.type === 'hourly-product' && !item.packageElements) item.packageElements = [];
+                            if (item.packageElements) {
+                                item.packageElements.forEach(member => {
                                     if (member.id >= state.nextNestedMemberId) state.nextNestedMemberId = member.id + 1;
+                                    // Migrate old hourlyRate to new cost/sell structure
+                                    if (member.hourlyRate !== undefined && member.costRate === undefined) {
+                                        member.costRate = member.hourlyRate;
+                                        member.sellRate = member.hourlyRate;
+                                        delete member.hourlyRate;
+                                    }
+                                    if (member.hours === undefined) member.hours = 0;
+                                    if (member.useCustomMarkup === undefined) member.useCustomMarkup = false;
+                                    if (member.customMarkupPercent === undefined) member.customMarkupPercent = 0;
                                 });
                             }
                         });
@@ -285,6 +319,199 @@ function saveNotes() {
     }
     
     hideNotesModal();
+}
+
+/* ============================================
+   ROLE PRESETS MANAGEMENT
+   ============================================ */
+function showPresetsModal() {
+    const modal = document.getElementById('presetsModal');
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    renderPresetsList();
+}
+
+function hidePresetsModal() {
+    const modal = document.getElementById('presetsModal');
+    modal.hidden = true;
+    document.body.style.overflow = '';
+}
+
+function renderPresetsList() {
+    // Render industry standard roles (now editable)
+    const industryList = document.getElementById('industryRolesList');
+    if (industryList) {
+        industryList.innerHTML = '';
+        CREATIVE_INDUSTRY_ROLES.forEach((role, index) => {
+            // Check if this role has been overridden
+            const override = state.industryRoleOverrides && state.industryRoleOverrides[role.role];
+            const displayRole = override || role;
+            const isModified = override !== undefined;
+            
+            const item = document.createElement('div');
+            item.className = `preset-item preset-editable ${isModified ? 'preset-modified' : ''}`;
+            item.innerHTML = `
+                <div class="preset-info">
+                    <strong>${displayRole.role}${isModified ? ' <span class="modified-badge">Modified</span>' : ''}</strong>
+                    <span>Cost: $${displayRole.costRate || displayRole.hourlyRate}/hr · Sell: $${displayRole.sellRate || displayRole.hourlyRate}/hr (${displayRole.hours} hrs)</span>
+                </div>
+                <div class="preset-actions">
+                    <button class="btn-edit-preset btn-edit-industry-preset" data-role="${role.role}" title="Edit this preset">Edit</button>
+                    ${isModified ? `<button class="btn-reset-preset btn-reset-industry-preset" data-role="${role.role}" title="Reset to default">Reset</button>` : ''}
+                </div>
+            `;
+            industryList.appendChild(item);
+        });
+    }
+    
+    // Render custom roles (editable)
+    const customList = document.getElementById('customRolesList');
+    if (customList) {
+        customList.innerHTML = '';
+        if (!state.customRoles || state.customRoles.length === 0) {
+            customList.innerHTML = '<p class="empty-state-small">No custom roles yet. Click "Add New" to create one.</p>';
+        } else {
+            state.customRoles.forEach((role, index) => {
+                const item = document.createElement('div');
+                item.className = 'preset-item preset-editable';
+                item.innerHTML = `
+                    <div class="preset-info">
+                        <strong>${role.role}</strong>
+                        <span>$${role.hourlyRate}/hr${role.fullDayRate ? ` · $${role.fullDayRate}/day` : ''}</span>
+                    </div>
+                    <div class="preset-actions">
+                        <button class="btn-edit-preset" data-index="${index}" title="Edit this preset">Edit</button>
+                        <button class="btn-delete-preset" data-index="${index}" title="Delete this preset">Delete</button>
+                    </div>
+                `;
+                customList.appendChild(item);
+            });
+        }
+    }
+}
+
+function addCustomRole() {
+    const roleName = prompt('Enter role name:');
+    if (!roleName || !roleName.trim()) return;
+    
+    const hourlyRate = parseFloat(prompt('Enter hourly rate:'));
+    if (isNaN(hourlyRate) || hourlyRate <= 0) {
+        alert('Please enter a valid hourly rate');
+        return;
+    }
+    
+    const fullDayRate = parseFloat(prompt('Enter full day rate (optional):') || '0');
+    const hours = parseFloat(prompt('Default hours (optional, defaults to 10):') || '10');
+    
+    saveToHistory();
+    
+    if (!state.customRoles) state.customRoles = [];
+    state.customRoles.push({
+        role: roleName.trim(),
+        hourlyRate: hourlyRate,
+        fullDayRate: fullDayRate > 0 ? fullDayRate : hourlyRate * (hours || 10),
+        hours: hours || 10
+    });
+    
+    debouncedSave();
+    renderPresetsList();
+    showSaveStatus('Custom role added');
+}
+
+function editCustomRole(index) {
+    if (!state.customRoles || !state.customRoles[index]) return;
+    
+    const role = state.customRoles[index];
+    
+    const newName = prompt('Enter role name:', role.role);
+    if (!newName || !newName.trim()) return;
+    
+    const newHourlyRate = parseFloat(prompt('Enter hourly rate:', role.hourlyRate));
+    if (isNaN(newHourlyRate) || newHourlyRate <= 0) {
+        alert('Please enter a valid hourly rate');
+        return;
+    }
+    
+    const newFullDayRate = parseFloat(prompt('Enter full day rate (optional):', role.fullDayRate || '') || '0');
+    const newHours = parseFloat(prompt('Default hours (optional):', role.hours || '10') || '10');
+    
+    saveToHistory();
+    
+    state.customRoles[index] = {
+        role: newName.trim(),
+        hourlyRate: newHourlyRate,
+        fullDayRate: newFullDayRate > 0 ? newFullDayRate : newHourlyRate * (newHours || 10),
+        hours: newHours || 10
+    };
+    
+    debouncedSave();
+    renderPresetsList();
+    showSaveStatus('Custom role updated');
+}
+
+function deleteCustomRole(index) {
+    if (!state.customRoles || !state.customRoles[index]) return;
+    
+    const role = state.customRoles[index];
+    if (!confirm(`Delete custom role "${role.role}"?`)) return;
+    
+    saveToHistory();
+    state.customRoles.splice(index, 1);
+    debouncedSave();
+    renderPresetsList();
+    showSaveStatus('Custom role deleted');
+}
+
+function editIndustryRole(roleName) {
+    // Find the original role
+    const originalRole = CREATIVE_INDUSTRY_ROLES.find(r => r.role === roleName);
+    if (!originalRole) return;
+    
+    // Check if there's an override
+    const currentRole = (state.industryRoleOverrides && state.industryRoleOverrides[roleName]) || originalRole;
+    
+    const newCostRate = parseFloat(prompt('Enter cost rate (hourly):', currentRole.costRate || currentRole.hourlyRate));
+    if (isNaN(newCostRate) || newCostRate < 0) {
+        alert('Please enter a valid cost rate');
+        return;
+    }
+    
+    const newSellRate = parseFloat(prompt('Enter sell rate (hourly):', currentRole.sellRate || currentRole.hourlyRate));
+    if (isNaN(newSellRate) || newSellRate < 0) {
+        alert('Please enter a valid sell rate');
+        return;
+    }
+    
+    const newHours = parseFloat(prompt('Default hours:', currentRole.hours || 10));
+    
+    saveToHistory();
+    
+    if (!state.industryRoleOverrides) state.industryRoleOverrides = {};
+    
+    state.industryRoleOverrides[roleName] = {
+        role: roleName,
+        costRate: newCostRate,
+        sellRate: newSellRate,
+        hourlyRate: newSellRate, // For compatibility
+        fullDayRate: newSellRate * (newHours || 10),
+        hours: newHours || 10
+    };
+    
+    debouncedSave();
+    renderPresetsList();
+    showSaveStatus('Industry role customized');
+}
+
+function resetIndustryRole(roleName) {
+    if (!state.industryRoleOverrides || !state.industryRoleOverrides[roleName]) return;
+    
+    if (!confirm(`Reset "${roleName}" to default values?`)) return;
+    
+    saveToHistory();
+    delete state.industryRoleOverrides[roleName];
+    debouncedSave();
+    renderPresetsList();
+    showSaveStatus('Industry role reset to default');
 }
 
 /* ============================================
@@ -474,8 +701,9 @@ function deleteClientHistory(clientName) {
    CALCULATIONS
    ============================================ */
 function calculateBaseAmount(item) {
-    if (item.type === 'team-member') {
-        return item.hourlyRate ? item.hourlyRate * item.hours : 0;
+    if (item.type === 'package-element') {
+        // For package elements, use costRate for base calculation
+        return item.costRate ? item.costRate * item.hours : 0;
     } else if (item.type === 'hourly-product') {
         return calculateHourlyProductBaseAmount(item);
     } else if (item.type === 'flat-product') {
@@ -485,17 +713,47 @@ function calculateBaseAmount(item) {
 }
 
 function calculateHourlyProductBaseAmount(item) {
-    if (!item.teamMembers || item.teamMembers.length === 0) return 0;
-    return item.teamMembers.reduce((sum, member) => {
-        return sum + (member.hourlyRate ? member.hourlyRate * member.hours : 0);
+    if (!item.packageElements || item.packageElements.length === 0) return 0;
+    return item.packageElements.reduce((sum, member) => {
+        return sum + (member.costRate ? member.costRate * member.hours : 0);
     }, 0);
 }
 
 function calculateMarkupAmount(item) {
-    if (item.type === 'flat-product') return 0;
-    const base = calculateBaseAmount(item);
-    const markupPercent = state.globalMarkupPercent / 100;
-    return base * markupPercent;
+    if (item.type === 'flat-product') {
+        // Flat products use global markup
+        const base = calculateBaseAmount(item);
+        return base * (state.globalMarkupPercent / 100);
+    }
+    
+    if (item.type === 'package-element') {
+        // For package elements, check if custom markup is enabled
+        if (item.useCustomMarkup && item.customMarkupPercent !== undefined) {
+            const base = calculateBaseAmount(item);
+            return base * (item.customMarkupPercent / 100);
+        } else {
+            // Use global markup
+            const base = calculateBaseAmount(item);
+            return base * (state.globalMarkupPercent / 100);
+        }
+    }
+    
+    // For hourly products, sum up the markup from all package elements
+    if (item.type === 'hourly-product') {
+        if (!item.packageElements || item.packageElements.length === 0) return 0;
+        return item.packageElements.reduce((sum, member) => {
+            const costTotal = (member.costRate || 0) * (member.hours || 0);
+            if (member.useCustomMarkup && member.customMarkupPercent !== undefined) {
+                // Use custom markup percentage
+                return sum + (costTotal * (member.customMarkupPercent / 100));
+            } else {
+                // Use global markup percentage
+                return sum + (costTotal * (state.globalMarkupPercent / 100));
+            }
+        }, 0);
+    }
+    
+    return 0;
 }
 
 function calculatePackageTotals(packageId) {
@@ -663,7 +921,7 @@ function addItem(packageId, type) {
             notes: ''
         };
         if (type === 'hourly-product') {
-            newItem.teamMembers = [];
+            newItem.packageElements = [];
         }
         pkg.items.push(newItem);
         renderItemsForPackage(packageId);
@@ -737,7 +995,7 @@ function renderItemsForPackage(packageId) {
 }
 
 /* ============================================
-   NESTED TEAM MEMBER CRUD
+   PACKAGE ELEMENT CRUD (formerly nested team members)
    ============================================ */
 function addNestedTeamMember(packageId, itemId) {
     const pkg = findPackage(packageId);
@@ -745,12 +1003,15 @@ function addNestedTeamMember(packageId, itemId) {
         const item = pkg.items.find(i => i.id === itemId);
         if (item) {
             saveToHistory();
-            if (!item.teamMembers) item.teamMembers = [];
-            item.teamMembers.push({
+            if (!item.packageElements) item.packageElements = [];
+            item.packageElements.push({
                 id: state.nextNestedMemberId++,
                 name: '',
-                hourlyRate: 0,
-                hours: 0
+                costRate: 0,
+                sellRate: 0,
+                hours: 0,
+                useCustomMarkup: false,
+                customMarkupPercent: 0
             });
             renderNestedMembersForItem(packageId, itemId);
             updateAllCalculations();
@@ -759,17 +1020,21 @@ function addNestedTeamMember(packageId, itemId) {
     }
 }
 
-function updateNestedTeamMember(packageId, itemId, memberId, field, value) {
+function duplicateNestedTeamMember(packageId, itemId, memberId) {
     const pkg = findPackage(packageId);
     if (pkg) {
         const item = pkg.items.find(i => i.id === itemId);
-        if (item && item.teamMembers) {
-            const member = item.teamMembers.find(m => m.id === memberId);
+        if (item && item.packageElements) {
+            const member = item.packageElements.find(m => m.id === memberId);
             if (member) {
-                if (member[field] !== value) {
-                    saveToHistory();
-                }
-                member[field] = value;
+                saveToHistory();
+                const duplicate = {
+                    ...member,
+                    id: state.nextNestedMemberId++,
+                    name: member.name ? `${member.name} (Copy)` : ''
+                };
+                item.packageElements.push(duplicate);
+                renderNestedMembersForItem(packageId, itemId);
                 updateAllCalculations();
                 debouncedSave();
             }
@@ -777,13 +1042,96 @@ function updateNestedTeamMember(packageId, itemId, memberId, field, value) {
     }
 }
 
+function updateNestedTeamMember(packageId, itemId, memberId, field, value) {
+    const pkg = findPackage(packageId);
+    if (pkg) {
+        const item = pkg.items.find(i => i.id === itemId);
+        if (item && item.packageElements) {
+            const member = item.packageElements.find(m => m.id === memberId);
+            if (member) {
+                if (member[field] !== value) {
+                    saveToHistory();
+                }
+                
+                // Handle linked field updates for cost/sell/markup
+                if (field === 'sellRate') {
+                    member.sellRate = value;
+                    // Calculate new markup percentage from sell and cost
+                    if (member.costRate > 0) {
+                        member.customMarkupPercent = ((value - member.costRate) / member.costRate) * 100;
+                    }
+                    // Update the markup field in DOM without re-rendering
+                    updateNestedMemberFieldInDOM(packageId, itemId, memberId, 'customMarkupPercent', member.customMarkupPercent);
+                } else if (field === 'customMarkupPercent') {
+                    member.customMarkupPercent = value;
+                    // Calculate new sell rate from cost and markup
+                    if (member.costRate >= 0) {
+                        const markupMultiplier = 1 + (value / 100);
+                        member.sellRate = member.costRate * markupMultiplier;
+                    }
+                    // Update the sell rate field in DOM without re-rendering
+                    updateNestedMemberFieldInDOM(packageId, itemId, memberId, 'sellRate', member.sellRate);
+                } else if (field === 'costRate') {
+                    member.costRate = value;
+                    // If custom markup is in use, recalculate sell rate
+                    if (member.useCustomMarkup && member.customMarkupPercent !== undefined) {
+                        const markupMultiplier = 1 + (member.customMarkupPercent / 100);
+                        member.sellRate = value * markupMultiplier;
+                    } else {
+                        // Otherwise keep sell rate in sync with cost
+                        member.sellRate = value;
+                        // Recalculate markup % based on new values
+                        if (value > 0) {
+                            member.customMarkupPercent = ((member.sellRate - value) / value) * 100;
+                        }
+                    }
+                    // Update dependent fields in DOM without re-rendering
+                    updateNestedMemberFieldInDOM(packageId, itemId, memberId, 'sellRate', member.sellRate);
+                    updateNestedMemberFieldInDOM(packageId, itemId, memberId, 'customMarkupPercent', member.customMarkupPercent);
+                } else if (field === 'useCustomMarkup') {
+                    member.useCustomMarkup = value;
+                    if (!value) {
+                        // Reset to global markup - sync sell with cost
+                        member.sellRate = member.costRate;
+                        member.customMarkupPercent = 0;
+                    } else {
+                        // Enable custom markup - calculate percentage from current values
+                        if (member.costRate > 0) {
+                            const totalCost = member.costRate * (member.hours || 1);
+                            const totalSell = member.sellRate * (member.hours || 1);
+                            const markup = totalSell - totalCost;
+                            member.customMarkupPercent = totalCost > 0 ? (markup / totalCost) * 100 : state.globalMarkupPercent;
+                        } else {
+                            member.customMarkupPercent = state.globalMarkupPercent;
+                        }
+                    }
+                } else {
+                    member[field] = value;
+                }
+
+                updateAllCalculations();
+                debouncedSave();
+            }
+        }
+    }
+}
+
+function updateNestedMemberFieldInDOM(packageId, itemId, memberId, fieldName, value) {
+    // Find the specific input field in the DOM and update it without re-rendering
+    const input = document.querySelector(`[data-member-id="${memberId}"][data-field="${fieldName}"]`);
+    if (input && input !== document.activeElement) {
+        // Only update if it's not the currently focused field
+        input.value = typeof value === 'number' ? value.toFixed(2) : value;
+    }
+}
+
 function removeNestedTeamMember(packageId, itemId, memberId) {
     const pkg = findPackage(packageId);
     if (pkg) {
         const item = pkg.items.find(i => i.id === itemId);
-        if (item && item.teamMembers) {
+        if (item && item.packageElements) {
             saveToHistory();
-            item.teamMembers = item.teamMembers.filter(m => m.id !== memberId);
+            item.packageElements = item.packageElements.filter(m => m.id !== memberId);
             renderNestedMembersForItem(packageId, itemId);
             updateAllCalculations();
             debouncedSave();
@@ -797,11 +1145,43 @@ function renderNestedMembersForItem(packageId, itemId) {
         const item = pkg.items.find(i => i.id === itemId);
         const container = document.getElementById(`nested-members-${itemId}`);
         if (container) {
+            // Save focus state before re-rendering
+            const activeElement = document.activeElement;
+            let focusInfo = null;
+            
+            if (activeElement && container.contains(activeElement)) {
+                const memberId = activeElement.closest('.nested-team-member')?.dataset.memberId;
+                const fieldName = activeElement.dataset.field;
+                const selectionStart = activeElement.selectionStart;
+                const selectionEnd = activeElement.selectionEnd;
+                
+                focusInfo = {
+                    memberId,
+                    fieldName,
+                    selectionStart,
+                    selectionEnd
+                };
+            }
+            
             container.innerHTML = '';
-            if (item && item.teamMembers && item.teamMembers.length > 0) {
-                item.teamMembers.forEach(member => {
+            if (item && item.packageElements && item.packageElements.length > 0) {
+                item.packageElements.forEach(member => {
                     container.appendChild(createNestedTeamMemberElement(packageId, itemId, member));
                 });
+            }
+            
+            // Restore focus if we had it
+            if (focusInfo && focusInfo.memberId && focusInfo.fieldName) {
+                const memberElement = container.querySelector(`[data-member-id="${focusInfo.memberId}"]`);
+                if (memberElement) {
+                    const inputToFocus = memberElement.querySelector(`[data-field="${focusInfo.fieldName}"]`);
+                    if (inputToFocus) {
+                        inputToFocus.focus();
+                        if (typeof focusInfo.selectionStart === 'number') {
+                            inputToFocus.setSelectionRange(focusInfo.selectionStart, focusInfo.selectionEnd);
+                        }
+                    }
+                }
             }
         }
     }
@@ -861,6 +1241,7 @@ function createPackageElement(pkg, index) {
                 <span class="totals-label">Base Total</span>
                 <span class="totals-value" id="base-total-${pkg.id}">$0.00</span>
             </div>
+            <div id="custom-markup-breakdown-${pkg.id}"></div>
             <div class="totals-row">
                 <span class="totals-label">Markup (${state.globalMarkupPercent}%)</span>
                 <span class="totals-value" id="markup-total-${pkg.id}">$0.00</span>
@@ -953,8 +1334,8 @@ function createHourlyProductElement(packageId, item) {
     `;
 
     const nestedContainer = div.querySelector(`#nested-members-${item.id}`);
-    if (nestedContainer && item.teamMembers && item.teamMembers.length > 0) {
-        item.teamMembers.forEach(member => {
+    if (nestedContainer && item.packageElements && item.packageElements.length > 0) {
+        item.packageElements.forEach(member => {
             nestedContainer.appendChild(createNestedTeamMemberElement(packageId, item.id, member));
         });
     }
@@ -1026,41 +1407,117 @@ function createNestedTeamMemberElement(packageId, itemId, member) {
     div.className = 'nested-team-member';
     div.setAttribute('role', 'listitem');
 
-    const base = member.hourlyRate ? member.hourlyRate * member.hours : 0;
-    const markup = calculateMarkupAmount({
-        type: 'team-member',
-        hourlyRate: member.hourlyRate,
-        hours: member.hours
-    });
+    // Calculate values
+    const costRate = member.costRate || 0;
+    const sellRate = member.sellRate || costRate;
+    const hours = member.hours || 0;
+    const base = costRate * hours;
+    
+    // Calculate markup based on whether custom markup is used
+    let markup, markupPercent;
+    if (member.useCustomMarkup) {
+        markupPercent = member.customMarkupPercent || 0;
+        markup = base * (markupPercent / 100);
+    } else {
+        markup = (sellRate * hours) - base;
+        markupPercent = base > 0 ? ((sellRate - costRate) / costRate * 100) : 0;
+    }
+    
+    const total = base + markup;
     const memberName = member.name || 'Unnamed element';
+    
+    // Get combined role list (industry presets + custom roles)
+    const allRoles = [...CREATIVE_INDUSTRY_ROLES, ...(state.customRoles || [])];
+    
+    // Build role dropdown options
+    let roleOptions = '<option value="">Select role preset...</option>';
+    roleOptions += '<optgroup label="Industry Standard Roles">';
+    CREATIVE_INDUSTRY_ROLES.forEach(role => {
+        roleOptions += `<option value="${role.role}">${role.role} - $${role.hourlyRate}/hr ($${role.fullDayRate}/day)</option>`;
+    });
+    roleOptions += '</optgroup>';
+    
+    if (state.customRoles && state.customRoles.length > 0) {
+        roleOptions += '<optgroup label="Custom Roles">';
+        state.customRoles.forEach(role => {
+            roleOptions += `<option value="${role.role}">${role.role} - $${role.hourlyRate}/hr${role.fullDayRate ? ` ($${role.fullDayRate}/day)` : ''}</option>`;
+        });
+        roleOptions += '</optgroup>';
+    }
+    
+    // Custom markup indicator badge
+    const customMarkupBadge = member.useCustomMarkup 
+        ? `<span class="custom-markup-badge" title="Custom markup: ${markupPercent.toFixed(1)}% (overriding global ${state.globalMarkupPercent}%)">Custom ${markupPercent.toFixed(1)}%</span>`
+        : '';
 
     div.innerHTML = `
+        <div class="nested-team-member-header">
+            <div class="role-preset-selector">
+                <label for="role-preset-${member.id}">Role Preset</label>
+                <select id="role-preset-${member.id}" class="role-preset-select" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}">
+                    ${roleOptions}
+                </select>
+            </div>
+            ${customMarkupBadge}
+        </div>
+        
         <div class="nested-team-member-fields">
             <div class="form-group">
                 <label for="member-name-${member.id}">Name</label>
                 <input type="text" id="member-name-${member.id}" placeholder="e.g., Developer" value="${member.name}" class="nested-member-input" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" data-field="name">
             </div>
             <div class="form-group">
-                <label for="member-rate-${member.id}">Rate /hr</label>
+                <label for="member-hours-${member.id}">Hours</label>
+                <input type="number" id="member-hours-${member.id}" placeholder="10" min="0" step="0.25" value="${member.hours}" class="nested-member-input" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" data-field="hours">
+            </div>
+        </div>
+        
+        <div class="cost-sell-markup-fields">
+            <div class="form-group">
+                <label for="member-cost-${member.id}">Cost /hr</label>
                 <div class="input-with-suffix">
-                    <input type="number" id="member-rate-${member.id}" placeholder="100" min="0" step="1" value="${member.hourlyRate}" class="nested-member-input" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" data-field="hourlyRate" style="padding-left: 24px;">
+                    <input type="number" id="member-cost-${member.id}" placeholder="100" min="0" step="1" value="${costRate}" class="nested-member-input" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" data-field="costRate" style="padding-left: 24px;">
                     <span class="input-suffix" style="left: 12px; right: auto;">$</span>
                 </div>
             </div>
             <div class="form-group">
-                <label for="member-hours-${member.id}">Hours</label>
-                <input type="number" id="member-hours-${member.id}" placeholder="40" min="0" step="0.25" value="${member.hours}" class="nested-member-input" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" data-field="hours">
+                <label for="member-sell-${member.id}">Sell /hr</label>
+                <div class="input-with-suffix">
+                    <input type="number" id="member-sell-${member.id}" placeholder="120" min="0" step="1" value="${sellRate}" class="nested-member-input" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" data-field="sellRate" style="padding-left: 24px;" ${!member.useCustomMarkup ? 'readonly' : ''}>
+                    <span class="input-suffix" style="left: 12px; right: auto;">$</span>
+                </div>
             </div>
+            <div class="form-group">
+                <label for="member-markup-${member.id}">Markup %</label>
+                <div class="input-with-suffix">
+                    <input type="number" id="member-markup-${member.id}" placeholder="${state.globalMarkupPercent}" min="0" step="0.1" value="${markupPercent.toFixed(1)}" class="nested-member-input" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" data-field="customMarkupPercent" style="padding-right: 24px;" ${!member.useCustomMarkup ? 'readonly' : ''}>
+                    <span class="input-suffix" style="right: 12px;">%</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="custom-markup-controls">
+            <label class="checkbox-label">
+                <input type="checkbox" class="custom-markup-checkbox" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" ${member.useCustomMarkup ? 'checked' : ''}>
+                <span>Use custom markup (overrides global)</span>
+            </label>
+            ${member.useCustomMarkup ? `<button class="btn-reset-markup" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" title="Reset to global markup">Reset to Global</button>` : ''}
         </div>
 
         <div class="nested-member-footer">
             <div class="nested-member-summary" aria-live="polite">
-                Base: $${base.toFixed(2)} | Markup: $${markup.toFixed(2)} | Total: $${(base + markup).toFixed(2)}
+                Base: $${base.toFixed(2)} | Markup: $${markup.toFixed(2)} | Total: $${total.toFixed(2)}
             </div>
-            <button class="btn-remove-nested-member" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" aria-label="Remove ${memberName}">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                Remove
-            </button>
+            <div class="nested-member-actions">
+                <button class="btn-duplicate-nested-member" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" aria-label="Duplicate ${memberName}" title="Duplicate this package element">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    Duplicate
+                </button>
+                <button class="btn-remove-nested-member" data-package-id="${packageId}" data-item-id="${itemId}" data-member-id="${member.id}" aria-label="Remove ${memberName}">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    Remove
+                </button>
+            </div>
         </div>
     `;
 
@@ -1076,12 +1533,28 @@ function updateAllCalculations() {
     state.packages.forEach(pkg => {
         let baseTotal = 0;
         let markupTotal = 0;
+        const customMarkupItems = [];
 
         pkg.items.forEach(item => {
             const base = calculateBaseAmount(item);
             const markup = calculateMarkupAmount(item);
             baseTotal += base;
             markupTotal += markup;
+
+            // Track items with custom markup for breakdown
+            if (item.type === 'hourly-product' && item.packageElements) {
+                item.packageElements.forEach(member => {
+                    if (member.useCustomMarkup && member.customMarkupPercent !== undefined) {
+                        const memberBase = (member.costRate || 0) * (member.hours || 0);
+                        const memberMarkup = memberBase * (member.customMarkupPercent / 100);
+                        customMarkupItems.push({
+                            name: member.name || 'Unnamed',
+                            markup: memberMarkup,
+                            percent: member.customMarkupPercent
+                        });
+                    }
+                });
+            }
 
             if (item.type === 'hourly-product') {
                 const summaryEl = document.getElementById(`hourly-summary-${item.id}`);
@@ -1105,6 +1578,20 @@ function updateAllCalculations() {
                 goodPkg.items.forEach(item => {
                     baseTotal += calculateBaseAmount(item);
                     markupTotal += calculateMarkupAmount(item);
+                    // Track custom markup items from inherited packages
+                    if (item.type === 'hourly-product' && item.packageElements) {
+                        item.packageElements.forEach(member => {
+                            if (member.useCustomMarkup && member.customMarkupPercent !== undefined) {
+                                const memberBase = (member.costRate || 0) * (member.hours || 0);
+                                const memberMarkup = memberBase * (member.customMarkupPercent / 100);
+                                customMarkupItems.push({
+                                    name: member.name || 'Unnamed',
+                                    markup: memberMarkup,
+                                    percent: member.customMarkupPercent
+                                });
+                            }
+                        });
+                    }
                 });
             }
         } else if (pkg.name === 'Best') {
@@ -1114,13 +1601,54 @@ function updateAllCalculations() {
                 goodPkg.items.forEach(item => {
                     baseTotal += calculateBaseAmount(item);
                     markupTotal += calculateMarkupAmount(item);
+                    if (item.type === 'hourly-product' && item.packageElements) {
+                        item.packageElements.forEach(member => {
+                            if (member.useCustomMarkup && member.customMarkupPercent !== undefined) {
+                                const memberBase = (member.costRate || 0) * (member.hours || 0);
+                                const memberMarkup = memberBase * (member.customMarkupPercent / 100);
+                                customMarkupItems.push({
+                                    name: member.name || 'Unnamed',
+                                    markup: memberMarkup,
+                                    percent: member.customMarkupPercent
+                                });
+                            }
+                        });
+                    }
                 });
             }
             if (betterPkg) {
                 betterPkg.items.forEach(item => {
                     baseTotal += calculateBaseAmount(item);
                     markupTotal += calculateMarkupAmount(item);
+                    if (item.type === 'hourly-product' && item.packageElements) {
+                        item.packageElements.forEach(member => {
+                            if (member.useCustomMarkup && member.customMarkupPercent !== undefined) {
+                                const memberBase = (member.costRate || 0) * (member.hours || 0);
+                                const memberMarkup = memberBase * (member.customMarkupPercent / 100);
+                                customMarkupItems.push({
+                                    name: member.name || 'Unnamed',
+                                    markup: memberMarkup,
+                                    percent: member.customMarkupPercent
+                                });
+                            }
+                        });
+                    }
                 });
+            }
+        }
+
+        // Render custom markup breakdown
+        const breakdownContainer = document.getElementById(`custom-markup-breakdown-${pkg.id}`);
+        if (breakdownContainer) {
+            if (customMarkupItems.length > 0) {
+                breakdownContainer.innerHTML = customMarkupItems.map(item => `
+                    <div class="totals-row totals-row-custom-markup">
+                        <span class="totals-label totals-label-indent">${item.name} (${item.percent.toFixed(1)}%)</span>
+                        <span class="totals-value">$${item.markup.toFixed(2)}</span>
+                    </div>
+                `).join('');
+            } else {
+                breakdownContainer.innerHTML = '';
             }
         }
 
@@ -1248,7 +1776,7 @@ function downloadItemsAsCSV() {
                     state.globalMarkupPercent + '%',
                     formatCurrency(markup),
                     formatCurrency(final),
-                    `Container for package elements (${item.teamMembers?.length || 0} elements)`
+                    `Container for package elements (${item.packageElements?.length || 0} elements)`
                 ]);
             }
         });
@@ -1258,31 +1786,42 @@ function downloadItemsAsCSV() {
 
     // Package elements section
     rows.push(['=== PACKAGE ELEMENTS (Nested) ===']);
-    rows.push(['Package', 'Parent Item', 'Element Name', 'Hourly Rate', 'Hours', 'Base Amount', 'Markup %', 'Markup Amount', 'Final Amount', 'Calculation']);
+    rows.push(['Package', 'Parent Item', 'Element Name', 'Cost Rate', 'Sell Rate', 'Hours', 'Base Amount', 'Markup %', 'Markup Amount', 'Final Amount', 'Custom Markup', 'Calculation']);
 
     state.packages.forEach(pkg => {
         pkg.items.forEach(item => {
-            if (item.type === 'hourly-product' && item.teamMembers && item.teamMembers.length > 0) {
-                item.teamMembers.forEach(member => {
-                    const base = member.hourlyRate ? member.hourlyRate * member.hours : 0;
-                    const markup = calculateMarkupAmount({
-                        type: 'team-member',
-                        hourlyRate: member.hourlyRate,
-                        hours: member.hours
-                    });
+            if (item.type === 'hourly-product' && item.packageElements && item.packageElements.length > 0) {
+                item.packageElements.forEach(member => {
+                    const costRate = member.costRate || 0;
+                    const sellRate = member.sellRate || costRate;
+                    const hours = member.hours || 0;
+                    const base = costRate * hours;
+                    
+                    let markup, markupPercent;
+                    if (member.useCustomMarkup) {
+                        markupPercent = member.customMarkupPercent || 0;
+                        markup = base * (markupPercent / 100);
+                    } else {
+                        markup = (sellRate * hours) - base;
+                        markupPercent = base > 0 ? ((sellRate - costRate) / costRate * 100) : 0;
+                    }
+                    
                     const final = base + markup;
+                    const customMarkupStatus = member.useCustomMarkup ? `Yes (${markupPercent.toFixed(1)}%)` : `No (Global ${state.globalMarkupPercent}%)`;
 
                     rows.push([
                         pkg.name,
                         item.name || 'Untitled',
                         member.name || 'Unnamed',
-                        formatCurrency(member.hourlyRate),
-                        member.hours.toFixed(2),
+                        formatCurrency(costRate),
+                        formatCurrency(sellRate),
+                        hours.toFixed(2),
                         formatCurrency(base),
-                        state.globalMarkupPercent + '%',
+                        markupPercent.toFixed(1) + '%',
                         formatCurrency(markup),
                         formatCurrency(final),
-                        `${formatCurrency(member.hourlyRate)}/hr × ${member.hours.toFixed(2)} hrs = ${formatCurrency(base)} + ${state.globalMarkupPercent}% markup`
+                        customMarkupStatus,
+                        `Cost: ${formatCurrency(costRate)}/hr × ${hours.toFixed(2)} hrs = ${formatCurrency(base)} → Sell: ${formatCurrency(sellRate)}/hr`
                     ]);
                 });
             }
@@ -1407,6 +1946,8 @@ function resetEverything() {
     // Preserve templates and clients
     const savedTemplates = state.templates;
     const savedClients = state.clients;
+    const savedCustomRoles = state.customRoles || [];
+    const savedIndustryOverrides = state.industryRoleOverrides || {};
     
     // Reset to initial state but keep templates and clients
     state = {
@@ -1422,7 +1963,9 @@ function resetEverything() {
         nextItemId: 1,
         nextNestedMemberId: 1,
         templates: savedTemplates,
-        clients: savedClients
+        clients: savedClients,
+        customRoles: savedCustomRoles,
+        industryRoleOverrides: savedIndustryOverrides
     };
     
     // Save updated state (preserving templates/clients)
@@ -1482,10 +2025,24 @@ function loadStateFromJSON(event) {
                 if (pkg.items) {
                     pkg.items.forEach(item => {
                         if (item.id >= state.nextItemId) state.nextItemId = item.id + 1;
-                        if (item.type === 'hourly-product' && !item.teamMembers) item.teamMembers = [];
-                        if (item.teamMembers) {
-                            item.teamMembers.forEach(member => {
+                        // Migrate teamMembers to packageElements if needed
+                        if (item.type === 'hourly-product' && item.teamMembers && !item.packageElements) {
+                            item.packageElements = item.teamMembers;
+                            delete item.teamMembers;
+                        }
+                        if (item.type === 'hourly-product' && !item.packageElements) item.packageElements = [];
+                        if (item.packageElements) {
+                            item.packageElements.forEach(member => {
                                 if (member.id >= state.nextNestedMemberId) state.nextNestedMemberId = member.id + 1;
+                                // Migrate old hourlyRate to new cost/sell structure
+                                if (member.hourlyRate !== undefined && member.costRate === undefined) {
+                                    member.costRate = member.hourlyRate;
+                                    member.sellRate = member.hourlyRate;
+                                    delete member.hourlyRate;
+                                }
+                                if (member.hours === undefined) member.hours = 0;
+                                if (member.useCustomMarkup === undefined) member.useCustomMarkup = false;
+                                if (member.customMarkupPercent === undefined) member.customMarkupPercent = 0;
                             });
                         }
                     });
@@ -1832,6 +2389,40 @@ function attachEventListeners() {
             return false;
         }
 
+        if (e.target.classList.contains('btn-duplicate-nested-member') || e.target.closest('.btn-duplicate-nested-member')) {
+            const btn = e.target.classList.contains('btn-duplicate-nested-member') ? e.target : e.target.closest('.btn-duplicate-nested-member');
+            const packageId = parseInt(btn.dataset.packageId);
+            const itemId = parseInt(btn.dataset.itemId);
+            const memberId = parseInt(btn.dataset.memberId);
+            duplicateNestedTeamMember(packageId, itemId, memberId);
+            return false;
+        }
+
+        if (e.target.classList.contains('btn-reset-markup') || e.target.closest('.btn-reset-markup')) {
+            const btn = e.target.classList.contains('btn-reset-markup') ? e.target : e.target.closest('.btn-reset-markup');
+            const packageId = parseInt(btn.dataset.packageId);
+            const itemId = parseInt(btn.dataset.itemId);
+            const memberId = parseInt(btn.dataset.memberId);
+            
+            const pkg = findPackage(packageId);
+            if (pkg) {
+                const item = pkg.items.find(i => i.id === itemId);
+                if (item && item.packageElements) {
+                    const member = item.packageElements.find(m => m.id === memberId);
+                    if (member) {
+                        saveToHistory();
+                        member.useCustomMarkup = false;
+                        member.customMarkupPercent = 0;
+                        member.sellRate = member.costRate;
+                        renderNestedMembersForItem(packageId, itemId);
+                        updateAllCalculations();
+                        debouncedSave();
+                    }
+                }
+            }
+            return false;
+        }
+
         if (e.target.classList.contains('btn-notes') || e.target.closest('.btn-notes')) {
             const btn = e.target.classList.contains('btn-notes') ? e.target : e.target.closest('.btn-notes');
             const packageId = parseInt(btn.dataset.packageId);
@@ -1878,6 +2469,74 @@ function attachEventListeners() {
             }
         }
 
+    });
+
+    // Change event delegation for checkboxes and selects
+    grid.addEventListener('change', e => {
+        if (e.target.classList.contains('custom-markup-checkbox')) {
+            const packageId = parseInt(e.target.dataset.packageId);
+            const itemId = parseInt(e.target.dataset.itemId);
+            const memberId = parseInt(e.target.dataset.memberId);
+            updateNestedTeamMember(packageId, itemId, memberId, 'useCustomMarkup', e.target.checked);
+            // Re-render to show/hide related controls
+            renderNestedMembersForItem(packageId, itemId);
+        }
+
+        if (e.target.classList.contains('role-preset-select')) {
+            const roleName = e.target.value;
+            if (!roleName) return;
+            
+            const packageId = parseInt(e.target.dataset.packageId);
+            const itemId = parseInt(e.target.dataset.itemId);
+            const memberId = parseInt(e.target.dataset.memberId);
+            
+            // Find the role in combined list (check for overridden industry roles first)
+            let selectedRole = null;
+            
+            // Check if this industry role has been customized
+            if (state.industryRoleOverrides && state.industryRoleOverrides[roleName]) {
+                selectedRole = state.industryRoleOverrides[roleName];
+            } else {
+                const allRoles = [...CREATIVE_INDUSTRY_ROLES, ...(state.customRoles || [])];
+                selectedRole = allRoles.find(r => r.role === roleName);
+            }
+            
+            if (selectedRole) {
+                const pkg = findPackage(packageId);
+                if (pkg) {
+                    const item = pkg.items.find(i => i.id === itemId);
+                    if (item && item.packageElements) {
+                        const member = item.packageElements.find(m => m.id === memberId);
+                        if (member) {
+                            saveToHistory();
+                            member.name = selectedRole.role;
+                            member.costRate = selectedRole.costRate || selectedRole.hourlyRate;
+                            member.sellRate = selectedRole.sellRate || selectedRole.hourlyRate;
+                            member.hours = selectedRole.hours || 10;
+                            
+                            // Check if cost and sell are different - if so, enable custom markup
+                            if (member.costRate !== member.sellRate) {
+                                member.useCustomMarkup = true;
+                                // Calculate markup percentage
+                                if (member.costRate > 0) {
+                                    member.customMarkupPercent = ((member.sellRate - member.costRate) / member.costRate) * 100;
+                                }
+                            } else {
+                                member.useCustomMarkup = false;
+                                member.customMarkupPercent = 0;
+                            }
+                            
+                            renderNestedMembersForItem(packageId, itemId);
+                            updateAllCalculations();
+                            debouncedSave();
+                        }
+                    }
+                }
+            }
+            
+            // Reset dropdown
+            e.target.value = '';
+        }
     });
 
     // Global margin toggle listener
@@ -2109,6 +2768,61 @@ function attachEventListeners() {
     document.getElementById('notesModal').addEventListener('click', (e) => {
         if (e.target.id === 'notesModal') {
             hideNotesModal();
+        }
+    });
+    
+    // Manage Presets modal
+    const managePresetsBtn = document.getElementById('managePresetsBtn');
+    if (managePresetsBtn) {
+        managePresetsBtn.addEventListener('click', showPresetsModal);
+    }
+    
+    const closePresetsBtn = document.getElementById('closePresetsBtn');
+    if (closePresetsBtn) {
+        closePresetsBtn.addEventListener('click', hidePresetsModal);
+    }
+    
+    const addCustomRoleBtn = document.getElementById('addCustomRoleBtn');
+    if (addCustomRoleBtn) {
+        addCustomRoleBtn.addEventListener('click', addCustomRole);
+    }
+    
+    // Presets modal - delegation for edit/delete buttons
+    const presetsModal = document.getElementById('presetsModal');
+    if (presetsModal) {
+        presetsModal.addEventListener('click', (e) => {
+            if (e.target.id === 'presetsModal') {
+                hidePresetsModal();
+            }
+            
+            if (e.target.classList.contains('btn-edit-preset')) {
+                const index = parseInt(e.target.dataset.index);
+                editCustomRole(index);
+            }
+            
+            if (e.target.classList.contains('btn-delete-preset')) {
+                const index = parseInt(e.target.dataset.index);
+                deleteCustomRole(index);
+            }
+            
+            if (e.target.classList.contains('btn-edit-industry-preset')) {
+                const roleName = e.target.dataset.role;
+                editIndustryRole(roleName);
+            }
+            
+            if (e.target.classList.contains('btn-reset-industry-preset')) {
+                const roleName = e.target.dataset.role;
+                resetIndustryRole(roleName);
+            }
+        });
+    }
+    
+    // Close presets modal on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (!document.getElementById('presetsModal').hidden) {
+                hidePresetsModal();
+            }
         }
     });
 }

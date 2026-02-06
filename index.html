@@ -102,14 +102,30 @@
         </section>
 
         <section class="help-banner" role="note" aria-label="How the calculator works">
-            <strong>How it works:</strong> Add deliverables to each tier below. 
-            <strong>Better</strong> automatically includes everything from Good, and 
-            <strong>Best</strong> includes everything from Good + Better. 
+            <strong>How it works:</strong> Add deliverables to each package below. 
+            Packages can inherit items from previous tiers when enabled. 
             Global markup applies to hourly items only (not flat-rate items).
         </section>
 
         <section class="packages-section" aria-labelledby="packages-heading">
             <h2 id="packages-heading" class="visually-hidden">Pricing Packages</h2>
+            <div class="blank-canvas" id="blankCanvas" hidden>
+                <div class="blank-canvas-card">
+                    <h3>Start your estimate</h3>
+                    <p>Create your first package or load a previously saved estimate.</p>
+                    <div class="blank-canvas-actions">
+                        <button class="btn btn-primary" id="blankAddPackageBtn">Add your first package</button>
+                        <button class="btn btn-secondary" id="blankLoadEstimateBtn">Load saved estimate</button>
+                    </div>
+                </div>
+            </div>
+            <div class="inactive-packages" id="inactivePackages" hidden>
+                <div class="inactive-packages-header">
+                    <h3>Collapsed tiers</h3>
+                    <span>Not counted in totals</span>
+                </div>
+                <div class="inactive-packages-list" id="inactivePackagesList"></div>
+            </div>
             <div class="packages-grid" id="packagesGrid" role="list" aria-live="polite">
                 <!-- Packages will be generated here -->
             </div>
@@ -123,6 +139,18 @@
                 <div class="modal-actions">
                     <button class="btn" id="cancelReset">Cancel</button>
                     <button class="btn btn-danger" id="confirmReset">Yes, Reset Everything</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Confirm Modal -->
+        <div class="modal-overlay" id="actionConfirmModal" role="dialog" aria-modal="true" aria-labelledby="action-confirm-title" hidden>
+            <div class="modal-content">
+                <h2 id="action-confirm-title" class="modal-title">Confirm Action</h2>
+                <p class="modal-message" id="action-confirm-message">This action cannot be undone. Continue?</p>
+                <div class="modal-actions">
+                    <button class="btn" id="actionConfirmCancel">Cancel</button>
+                    <button class="btn btn-danger" id="actionConfirmAccept">Continue</button>
                 </div>
             </div>
         </div>
@@ -155,6 +183,47 @@
                     <h3>Custom Roles <button class="btn-small btn-primary" id="addCustomRoleBtn">+ Add New</button></h3>
                     <div class="presets-custom-list" id="customRolesList">
                         <!-- Custom roles will be listed here -->
+                    </div>
+
+                    <div class="preset-editor" id="presetEditor" hidden>
+                        <h4 id="presetEditorTitle">Add Role Preset</h4>
+                        <div class="preset-editor-error" id="presetEditorError" hidden></div>
+                        <div class="field-group full">
+                            <div class="form-group">
+                                <label for="presetRoleName">Role Name</label>
+                                <input type="text" id="presetRoleName" placeholder="e.g., Producer">
+                            </div>
+                        </div>
+                        <div class="field-group preset-fields-custom">
+                            <div class="form-group">
+                                <label for="presetHourlyRate">Hourly Rate</label>
+                                <input type="number" id="presetHourlyRate" min="0" step="1" placeholder="100">
+                            </div>
+                            <div class="form-group">
+                                <label for="presetFullDayRate">Full Day Rate (optional)</label>
+                                <input type="number" id="presetFullDayRate" min="0" step="1" placeholder="1000">
+                            </div>
+                        </div>
+                        <div class="field-group preset-fields-industry" hidden>
+                            <div class="form-group">
+                                <label for="presetCostRate">Cost Rate</label>
+                                <input type="number" id="presetCostRate" min="0" step="1" placeholder="100">
+                            </div>
+                            <div class="form-group">
+                                <label for="presetSellRate">Sell Rate</label>
+                                <input type="number" id="presetSellRate" min="0" step="1" placeholder="120">
+                            </div>
+                        </div>
+                        <div class="field-group full">
+                            <div class="form-group">
+                                <label for="presetHours">Default Hours</label>
+                                <input type="number" id="presetHours" min="0" step="0.25" placeholder="10">
+                            </div>
+                        </div>
+                        <div class="modal-actions">
+                            <button class="btn" id="presetEditorCancel">Cancel</button>
+                            <button class="btn btn-primary" id="presetEditorSave">Save Preset</button>
+                        </div>
                     </div>
                 </div>
                 

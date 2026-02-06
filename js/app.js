@@ -19,14 +19,10 @@ const CREATIVE_INDUSTRY_ROLES = [
    ============================================ */
 let state = {
     projectName: '',
-    packages: [
-        { id: 1, name: 'Good', items: [], costBasis: 0 },
-        { id: 2, name: 'Better', items: [], costBasis: 0 },
-        { id: 3, name: 'Best', items: [], costBasis: 0 }
-    ],
+    packages: [],
     globalMarkupPercent: 20,
     globalShowMargin: true,
-    nextPackageId: 4,
+    nextPackageId: 1,
     nextItemId: 1,
     nextNestedMemberId: 1,
     templates: {},
@@ -34,6 +30,12 @@ let state = {
     customRoles: [],
     industryRoleOverrides: {}
 };
+
+const STANDARD_TIERS = [
+    { key: 'good', name: 'Good', inheritFromPrevious: false },
+    { key: 'better', name: 'Better', inheritFromPrevious: true },
+    { key: 'best', name: 'Best', inheritFromPrevious: true }
+];
 
 /* ============================================
    UNDO/REDO HISTORY
@@ -144,7 +146,7 @@ function loadFromLocalStorage() {
                 if (state.projectName === undefined) state.projectName = '';
                 if (state.globalMarkupPercent === undefined) state.globalMarkupPercent = 20;
                 if (state.globalShowMargin === undefined) state.globalShowMargin = true;
-                if (state.nextPackageId === undefined) state.nextPackageId = 4;
+                if (state.nextPackageId === undefined) state.nextPackageId = 1;
                 if (state.nextItemId === undefined) state.nextItemId = 1;
                 if (state.nextNestedMemberId === undefined) state.nextNestedMemberId = 1;
                 if (state.templates === undefined) state.templates = {};
@@ -153,8 +155,8 @@ function loadFromLocalStorage() {
                 if (state.industryRoleOverrides === undefined) state.industryRoleOverrides = {};
                 
                 // Ensure all packages have new fields
-                state.packages.forEach(pkg => {
-                    if (pkg.costBasis === undefined) pkg.costBasis = 0;
+                state.packages.forEach((pkg, index) => {
+                    normalizePackage(pkg, index);
                     if (pkg.items) {
                         pkg.items.forEach(item => {
                             if (item.notes === undefined) item.notes = '';
@@ -225,6 +227,43 @@ function showSaveStatus(text) {
 }
 
 /* ============================================
+   GENERIC CONFIRM MODAL
+   ============================================ */
+let actionConfirmCallback = null;
+
+function showActionConfirm({ title, message, confirmText, cancelText, onConfirm }) {
+    const modal = document.getElementById('actionConfirmModal');
+    const titleEl = document.getElementById('action-confirm-title');
+    const messageEl = document.getElementById('action-confirm-message');
+    const confirmBtn = document.getElementById('actionConfirmAccept');
+    const cancelBtn = document.getElementById('actionConfirmCancel');
+
+    if (!modal || !titleEl || !messageEl || !confirmBtn || !cancelBtn) return;
+
+    titleEl.textContent = title || 'Confirm Action';
+    messageEl.textContent = message || 'This action cannot be undone. Continue?';
+    confirmBtn.textContent = confirmText || 'Continue';
+    cancelBtn.textContent = cancelText || 'Cancel';
+    cancelBtn.style.display = cancelText ? '' : 'none';
+
+    actionConfirmCallback = typeof onConfirm === 'function' ? onConfirm : null;
+
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    confirmBtn.focus();
+}
+
+function hideActionConfirm() {
+    const modal = document.getElementById('actionConfirmModal');
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    const cancelBtn = document.getElementById('actionConfirmCancel');
+    if (cancelBtn) cancelBtn.style.display = '';
+    actionConfirmCallback = null;
+}
+
+/* ============================================
    UTILITIES
    ============================================ */
 function findPackage(packageId) {
@@ -238,6 +277,75 @@ function findItem(packageId, itemId) {
 
 function formatCurrency(value) {
     return `$${parseFloat(value).toFixed(2)}`;
+}
+
+function getActivePackages() {
+    return state.packages.filter(pkg => pkg.isActive !== false);
+}
+
+function getInactivePackages() {
+    return state.packages.filter(pkg => pkg.isActive === false);
+}
+
+function getStandardTierConfig(tierKey) {
+    return STANDARD_TIERS.find(tier => tier.key === tierKey);
+}
+
+function getTierKeyFromName(name) {
+    const normalized = String(name || '').trim().toLowerCase();
+    if (normalized === 'good') return 'good';
+    if (normalized === 'better') return 'better';
+    if (normalized === 'best') return 'best';
+    return 'custom';
+}
+
+function normalizePackage(pkg, index) {
+    if (!pkg) return;
+    if (pkg.name === undefined) pkg.name = 'Untitled';
+    if (pkg.tierKey === undefined) pkg.tierKey = getTierKeyFromName(pkg.name);
+    if (pkg.inheritFromPrevious === undefined) pkg.inheritFromPrevious = index > 0;
+    if (pkg.isActive === undefined) pkg.isActive = true;
+    if (!Array.isArray(pkg.items)) pkg.items = [];
+    if (pkg.costBasis === undefined) pkg.costBasis = 0;
+}
+
+function insertPackageByTier(pkg) {
+    const tierIndex = STANDARD_TIERS.findIndex(tier => tier.key === pkg.tierKey);
+    if (tierIndex === -1) {
+        state.packages.push(pkg);
+        return;
+    }
+    let insertAt = state.packages.length;
+    for (let i = 0; i < state.packages.length; i++) {
+        const existingTierIndex = STANDARD_TIERS.findIndex(tier => tier.key === state.packages[i].tierKey);
+        if (existingTierIndex > tierIndex) {
+            insertAt = i;
+            break;
+        }
+    }
+    state.packages.splice(insertAt, 0, pkg);
+}
+
+function getInheritedPackagesForIndex(index, packages = getActivePackages()) {
+    const pkg = packages[index];
+    if (!pkg || !pkg.inheritFromPrevious || index <= 0) return [];
+    return packages.slice(0, index);
+}
+
+function getInheritedItemNamesForIndex(index, packages = getActivePackages()) {
+    const inheritedPackages = getInheritedPackagesForIndex(index, packages);
+    const names = [];
+    inheritedPackages.forEach(pkg => {
+        pkg.items.forEach(item => {
+            names.push(item.name || 'Untitled');
+        });
+    });
+    return names;
+}
+
+function getInheritedPackageNamesForIndex(index, packages = getActivePackages()) {
+    const inheritedPackages = getInheritedPackagesForIndex(index, packages);
+    return inheritedPackages.map(pkg => pkg.name || 'Untitled');
 }
 
 /* ============================================
@@ -335,6 +443,7 @@ function hidePresetsModal() {
     const modal = document.getElementById('presetsModal');
     modal.hidden = true;
     document.body.style.overflow = '';
+    hidePresetEditor();
 }
 
 function renderPresetsList() {
@@ -391,127 +500,229 @@ function renderPresetsList() {
 }
 
 function addCustomRole() {
-    const roleName = prompt('Enter role name:');
-    if (!roleName || !roleName.trim()) return;
-    
-    const hourlyRate = parseFloat(prompt('Enter hourly rate:'));
-    if (isNaN(hourlyRate) || hourlyRate <= 0) {
-        alert('Please enter a valid hourly rate');
-        return;
-    }
-    
-    const fullDayRate = parseFloat(prompt('Enter full day rate (optional):') || '0');
-    const hours = parseFloat(prompt('Default hours (optional, defaults to 10):') || '10');
-    
-    saveToHistory();
-    
-    if (!state.customRoles) state.customRoles = [];
-    state.customRoles.push({
-        role: roleName.trim(),
-        hourlyRate: hourlyRate,
-        fullDayRate: fullDayRate > 0 ? fullDayRate : hourlyRate * (hours || 10),
-        hours: hours || 10
-    });
-    
-    debouncedSave();
-    renderPresetsList();
-    showSaveStatus('Custom role added');
+    showPresetEditor({ mode: 'custom-new' });
 }
 
 function editCustomRole(index) {
     if (!state.customRoles || !state.customRoles[index]) return;
-    
-    const role = state.customRoles[index];
-    
-    const newName = prompt('Enter role name:', role.role);
-    if (!newName || !newName.trim()) return;
-    
-    const newHourlyRate = parseFloat(prompt('Enter hourly rate:', role.hourlyRate));
-    if (isNaN(newHourlyRate) || newHourlyRate <= 0) {
-        alert('Please enter a valid hourly rate');
-        return;
-    }
-    
-    const newFullDayRate = parseFloat(prompt('Enter full day rate (optional):', role.fullDayRate || '') || '0');
-    const newHours = parseFloat(prompt('Default hours (optional):', role.hours || '10') || '10');
-    
-    saveToHistory();
-    
-    state.customRoles[index] = {
-        role: newName.trim(),
-        hourlyRate: newHourlyRate,
-        fullDayRate: newFullDayRate > 0 ? newFullDayRate : newHourlyRate * (newHours || 10),
-        hours: newHours || 10
-    };
-    
-    debouncedSave();
-    renderPresetsList();
-    showSaveStatus('Custom role updated');
+    showPresetEditor({ mode: 'custom-edit', index });
 }
 
 function deleteCustomRole(index) {
     if (!state.customRoles || !state.customRoles[index]) return;
-    
     const role = state.customRoles[index];
-    if (!confirm(`Delete custom role "${role.role}"?`)) return;
-    
-    saveToHistory();
-    state.customRoles.splice(index, 1);
-    debouncedSave();
-    renderPresetsList();
-    showSaveStatus('Custom role deleted');
+    showActionConfirm({
+        title: 'Delete role preset?',
+        message: 'This action cannot be undone. Continue?',
+        confirmText: 'Delete preset',
+        onConfirm: () => {
+            saveToHistory();
+            state.customRoles.splice(index, 1);
+            debouncedSave();
+            renderPresetsList();
+            showSaveStatus('Custom role deleted');
+        }
+    });
 }
 
 function editIndustryRole(roleName) {
-    // Find the original role
-    const originalRole = CREATIVE_INDUSTRY_ROLES.find(r => r.role === roleName);
-    if (!originalRole) return;
-    
-    // Check if there's an override
-    const currentRole = (state.industryRoleOverrides && state.industryRoleOverrides[roleName]) || originalRole;
-    
-    const newCostRate = parseFloat(prompt('Enter cost rate (hourly):', currentRole.costRate || currentRole.hourlyRate));
-    if (isNaN(newCostRate) || newCostRate < 0) {
-        alert('Please enter a valid cost rate');
-        return;
-    }
-    
-    const newSellRate = parseFloat(prompt('Enter sell rate (hourly):', currentRole.sellRate || currentRole.hourlyRate));
-    if (isNaN(newSellRate) || newSellRate < 0) {
-        alert('Please enter a valid sell rate');
-        return;
-    }
-    
-    const newHours = parseFloat(prompt('Default hours:', currentRole.hours || 10));
-    
-    saveToHistory();
-    
-    if (!state.industryRoleOverrides) state.industryRoleOverrides = {};
-    
-    state.industryRoleOverrides[roleName] = {
-        role: roleName,
-        costRate: newCostRate,
-        sellRate: newSellRate,
-        hourlyRate: newSellRate, // For compatibility
-        fullDayRate: newSellRate * (newHours || 10),
-        hours: newHours || 10
-    };
-    
-    debouncedSave();
-    renderPresetsList();
-    showSaveStatus('Industry role customized');
+    showPresetEditor({ mode: 'industry-edit', roleName });
 }
 
 function resetIndustryRole(roleName) {
     if (!state.industryRoleOverrides || !state.industryRoleOverrides[roleName]) return;
-    
-    if (!confirm(`Reset "${roleName}" to default values?`)) return;
-    
-    saveToHistory();
-    delete state.industryRoleOverrides[roleName];
-    debouncedSave();
-    renderPresetsList();
-    showSaveStatus('Industry role reset to default');
+
+    showActionConfirm({
+        title: 'Reset industry role?',
+        message: 'This action cannot be undone. Continue?',
+        confirmText: 'Reset role',
+        onConfirm: () => {
+            saveToHistory();
+            delete state.industryRoleOverrides[roleName];
+            debouncedSave();
+            renderPresetsList();
+            showSaveStatus('Industry role reset to default');
+        }
+    });
+}
+
+/* ============================================
+   PRESET EDITOR (INLINE)
+   ============================================ */
+let presetEditorState = {
+    mode: null,
+    index: null,
+    roleName: null
+};
+
+function showPresetEditor({ mode, index = null, roleName = null }) {
+    const editor = document.getElementById('presetEditor');
+    const title = document.getElementById('presetEditorTitle');
+    const error = document.getElementById('presetEditorError');
+    const roleInput = document.getElementById('presetRoleName');
+    const hourlyInput = document.getElementById('presetHourlyRate');
+    const fullDayInput = document.getElementById('presetFullDayRate');
+    const costInput = document.getElementById('presetCostRate');
+    const sellInput = document.getElementById('presetSellRate');
+    const hoursInput = document.getElementById('presetHours');
+    const customFields = document.querySelector('.preset-fields-custom');
+    const industryFields = document.querySelector('.preset-fields-industry');
+
+    if (!editor || !title || !roleInput || !hourlyInput || !fullDayInput || !costInput || !sellInput || !hoursInput) return;
+
+    presetEditorState = { mode, index, roleName };
+
+    if (error) {
+        error.hidden = true;
+        error.textContent = '';
+    }
+
+    if (mode === 'custom-new') {
+        title.textContent = 'Add Role Preset';
+        roleInput.value = '';
+        hourlyInput.value = '';
+        fullDayInput.value = '';
+        hoursInput.value = '10';
+        roleInput.disabled = false;
+        if (customFields) customFields.hidden = false;
+        if (industryFields) industryFields.hidden = true;
+    }
+
+    if (mode === 'custom-edit') {
+        const role = state.customRoles[index];
+        title.textContent = 'Edit Role Preset';
+        roleInput.value = role?.role || '';
+        hourlyInput.value = role?.hourlyRate ?? '';
+        fullDayInput.value = role?.fullDayRate ?? '';
+        hoursInput.value = role?.hours ?? '10';
+        roleInput.disabled = false;
+        if (customFields) customFields.hidden = false;
+        if (industryFields) industryFields.hidden = true;
+    }
+
+    if (mode === 'industry-edit') {
+        const originalRole = CREATIVE_INDUSTRY_ROLES.find(r => r.role === roleName);
+        const currentRole = (state.industryRoleOverrides && state.industryRoleOverrides[roleName]) || originalRole;
+        title.textContent = 'Edit Industry Role';
+        roleInput.value = currentRole?.role || roleName || '';
+        costInput.value = currentRole?.costRate ?? currentRole?.hourlyRate ?? '';
+        sellInput.value = currentRole?.sellRate ?? currentRole?.hourlyRate ?? '';
+        hoursInput.value = currentRole?.hours ?? '10';
+        roleInput.disabled = true;
+        if (customFields) customFields.hidden = true;
+        if (industryFields) industryFields.hidden = false;
+    }
+
+    editor.hidden = false;
+    roleInput.focus();
+}
+
+function hidePresetEditor() {
+    const editor = document.getElementById('presetEditor');
+    const error = document.getElementById('presetEditorError');
+    if (editor) editor.hidden = true;
+    if (error) {
+        error.hidden = true;
+        error.textContent = '';
+    }
+    presetEditorState = { mode: null, index: null, roleName: null };
+}
+
+function showPresetEditorError(message) {
+    const error = document.getElementById('presetEditorError');
+    if (!error) return;
+    error.textContent = message;
+    error.hidden = false;
+}
+
+function savePresetEditor() {
+    const roleInput = document.getElementById('presetRoleName');
+    const hourlyInput = document.getElementById('presetHourlyRate');
+    const fullDayInput = document.getElementById('presetFullDayRate');
+    const costInput = document.getElementById('presetCostRate');
+    const sellInput = document.getElementById('presetSellRate');
+    const hoursInput = document.getElementById('presetHours');
+
+    if (!roleInput || !hourlyInput || !fullDayInput || !costInput || !sellInput || !hoursInput) return;
+
+    const roleName = roleInput.value.trim();
+    const hours = parseFloat(hoursInput.value);
+    const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 10;
+
+    if (presetEditorState.mode === 'custom-new' || presetEditorState.mode === 'custom-edit') {
+        const hourlyRate = parseFloat(hourlyInput.value);
+        const fullDayRate = parseFloat(fullDayInput.value);
+
+        if (!roleName) {
+            showPresetEditorError('Role name is required.');
+            return;
+        }
+        if (!Number.isFinite(hourlyRate) || hourlyRate <= 0) {
+            showPresetEditorError('Hourly rate must be a positive number.');
+            return;
+        }
+
+        const computedFullDay = Number.isFinite(fullDayRate) && fullDayRate > 0
+            ? fullDayRate
+            : hourlyRate * safeHours;
+
+        saveToHistory();
+        if (!state.customRoles) state.customRoles = [];
+
+        const payload = {
+            role: roleName,
+            hourlyRate: hourlyRate,
+            fullDayRate: computedFullDay,
+            hours: safeHours
+        };
+
+        if (presetEditorState.mode === 'custom-new') {
+            state.customRoles.push(payload);
+            showSaveStatus('Custom role added');
+        } else if (presetEditorState.mode === 'custom-edit') {
+            state.customRoles[presetEditorState.index] = payload;
+            showSaveStatus('Custom role updated');
+        }
+
+        debouncedSave();
+        renderPresetsList();
+        hidePresetEditor();
+        return;
+    }
+
+    if (presetEditorState.mode === 'industry-edit') {
+        const costRate = parseFloat(costInput.value);
+        const sellRate = parseFloat(sellInput.value);
+
+        if (!Number.isFinite(costRate) || costRate < 0) {
+            showPresetEditorError('Cost rate must be 0 or greater.');
+            return;
+        }
+        if (!Number.isFinite(sellRate) || sellRate < 0) {
+            showPresetEditorError('Sell rate must be 0 or greater.');
+            return;
+        }
+
+        const originalRole = presetEditorState.roleName;
+        if (!originalRole) return;
+
+        saveToHistory();
+        if (!state.industryRoleOverrides) state.industryRoleOverrides = {};
+
+        state.industryRoleOverrides[originalRole] = {
+            role: originalRole,
+            costRate: costRate,
+            sellRate: sellRate,
+            hourlyRate: sellRate,
+            fullDayRate: sellRate * safeHours,
+            hours: safeHours
+        };
+
+        debouncedSave();
+        renderPresetsList();
+        showSaveStatus('Industry role customized');
+        hidePresetEditor();
+    }
 }
 
 /* ============================================
@@ -543,48 +754,58 @@ function loadTemplate(templateName) {
         alert('Template not found');
         return;
     }
-    
-    // Warn user that current estimate will be replaced
-    if (!confirm('Loading this template will replace your current estimate. Continue?')) {
-        return;
-    }
-    
-    saveToHistory();
-    
-    const template = state.templates[templateName];
-    state.packages = JSON.parse(JSON.stringify(template.packages));
-    state.globalMarkupPercent = template.globalMarkupPercent;
-    
-    // Reset next IDs and recalculate
-    state.nextItemId = 1;
-    state.nextNestedMemberId = 1;
-    state.packages.forEach(pkg => {
-        if (pkg.id >= state.nextPackageId) state.nextPackageId = pkg.id + 1;
-        if (pkg.items) {
-            pkg.items.forEach(item => {
-                if (item.id >= state.nextItemId) state.nextItemId = item.id + 1;
-                if (item.teamMembers) {
-                    item.teamMembers.forEach(member => {
-                        if (member.id >= state.nextNestedMemberId) state.nextNestedMemberId = member.id + 1;
+
+    showActionConfirm({
+        title: 'Load template?',
+        message: 'This will replace your current estimate. Continue?',
+        confirmText: 'Load template',
+        onConfirm: () => {
+            saveToHistory();
+            
+            const template = state.templates[templateName];
+            state.packages = JSON.parse(JSON.stringify(template.packages));
+            state.globalMarkupPercent = template.globalMarkupPercent;
+
+            state.packages.forEach((pkg, index) => normalizePackage(pkg, index));
+            
+            // Reset next IDs and recalculate
+            state.nextItemId = 1;
+            state.nextNestedMemberId = 1;
+            state.packages.forEach(pkg => {
+                if (pkg.id >= state.nextPackageId) state.nextPackageId = pkg.id + 1;
+                if (pkg.items) {
+                    pkg.items.forEach(item => {
+                        if (item.id >= state.nextItemId) state.nextItemId = item.id + 1;
+                        if (item.teamMembers) {
+                            item.teamMembers.forEach(member => {
+                                if (member.id >= state.nextNestedMemberId) state.nextNestedMemberId = member.id + 1;
+                            });
+                        }
                     });
                 }
             });
+            
+            document.getElementById('globalMarkup').value = state.globalMarkupPercent;
+            render();
+            updateAllCalculations();
+            debouncedSave();
+            showSaveStatus('Template loaded');
         }
     });
-    
-    document.getElementById('globalMarkup').value = state.globalMarkupPercent;
-    render();
-    updateAllCalculations();
-    debouncedSave();
-    showSaveStatus('Template loaded');
 }
 
 function deleteTemplate(templateName) {
-    if (!confirm(`Delete template "${templateName}"?`)) return;
-    delete state.templates[templateName];
-    debouncedSave();
-    updateTemplateDropdown();
-    showSaveStatus('Template deleted');
+    showActionConfirm({
+        title: 'Delete template?',
+        message: 'This action cannot be undone. Continue?',
+        confirmText: 'Delete template',
+        onConfirm: () => {
+            delete state.templates[templateName];
+            debouncedSave();
+            updateTemplateDropdown();
+            showSaveStatus('Template deleted');
+        }
+    });
 }
 
 function updateTemplateDropdown() {
@@ -632,24 +853,28 @@ function loadClientHistory(clientName, index) {
         return;
     }
     
-    // Warn user that current estimate will be replaced
-    if (!confirm('Loading this project will replace your current estimate. Continue?')) {
-        return;
-    }
-    
-    saveToHistory();
-    
-    const entry = state.clients[clientName][index];
-    state.projectName = entry.projectName;
-    state.packages = JSON.parse(JSON.stringify(entry.packages));
-    state.globalMarkupPercent = entry.globalMarkupPercent;
-    
-    document.getElementById('projectName').value = state.projectName;
-    document.getElementById('globalMarkup').value = state.globalMarkupPercent;
-    render();
-    updateAllCalculations();
-    debouncedSave();
-    showSaveStatus('Client history loaded');
+    showActionConfirm({
+        title: 'Load project?',
+        message: 'This will replace your current estimate. Continue?',
+        confirmText: 'Load project',
+        onConfirm: () => {
+            saveToHistory();
+            
+            const entry = state.clients[clientName][index];
+            state.projectName = entry.projectName;
+            state.packages = JSON.parse(JSON.stringify(entry.packages));
+            state.globalMarkupPercent = entry.globalMarkupPercent;
+
+            state.packages.forEach((pkg, index) => normalizePackage(pkg, index));
+            
+            document.getElementById('projectName').value = state.projectName;
+            document.getElementById('globalMarkup').value = state.globalMarkupPercent;
+            render();
+            updateAllCalculations();
+            debouncedSave();
+            showSaveStatus('Client history loaded');
+        }
+    });
 }
 
 function updateClientDropdown() {
@@ -688,11 +913,17 @@ function showClientProjects(clientName) {
 }
 
 function deleteClientHistory(clientName) {
-    if (!confirm(`Delete all history for "${clientName}"?`)) return;
-    delete state.clients[clientName];
-    debouncedSave();
-    updateClientDropdown();
-    showSaveStatus('Client history deleted');
+    showActionConfirm({
+        title: 'Delete client history?',
+        message: 'This action cannot be undone. Continue?',
+        confirmText: 'Delete history',
+        onConfirm: () => {
+            delete state.clients[clientName];
+            debouncedSave();
+            updateClientDropdown();
+            showSaveStatus('Client history deleted');
+        }
+    });
 }
 
 
@@ -801,60 +1032,191 @@ function updateGlobalMarkup() {
     debouncedSave();
 }
 
-/* ============================================
-   INHERITANCE HELPERS
-   ============================================ */
-function getInheritedItemNames(tierName) {
-    let names = [];
-    if (tierName === 'Better') {
-        const goodPkg = state.packages.find(p => p.name === 'Good');
-        if (goodPkg) {
-            names = goodPkg.items.map(i => i.name || 'Untitled');
-        }
-    } else if (tierName === 'Best') {
-        const goodPkg = state.packages.find(p => p.name === 'Good');
-        const betterPkg = state.packages.find(p => p.name === 'Better');
-        if (goodPkg) {
-            names.push(...goodPkg.items.map(i => i.name || 'Untitled'));
-        }
-        if (betterPkg) {
-            names.push(...betterPkg.items.map(i => i.name || 'Untitled'));
-        }
+function updatePackageName(packageId, value, commit = false) {
+    const pkg = findPackage(packageId);
+    if (!pkg) return;
+
+    const newName = value && value.trim() ? value.trim() : 'Untitled';
+    if (commit && pkg.name !== newName) {
+        saveToHistory();
     }
-    return names;
+
+    pkg.name = newName;
+
+    const packageEl = document.querySelector(`.package[data-package-id="${packageId}"]`);
+    if (packageEl) {
+        packageEl.setAttribute('aria-label', `${newName} pricing tier`);
+        const titleInput = packageEl.querySelector('.package-title-input');
+        if (titleInput && titleInput !== document.activeElement) {
+            titleInput.value = newName;
+        }
+        const label = packageEl.querySelector(`#add-items-label-${packageId}`);
+        if (label) label.textContent = `Add Items to ${newName}`;
+        const itemsContainer = packageEl.querySelector(`#items-${packageId}`);
+        if (itemsContainer) itemsContainer.setAttribute('aria-label', `Deliverables in ${newName}`);
+    }
+
+    updateInheritedItemsDisplay();
+    updateAllCalculations();
+
+    if (commit) {
+        debouncedSave();
+    }
 }
 
-function updateInheritedItemsDisplay() {
-    state.packages.forEach(pkg => {
-        if (pkg.name === 'Better' || pkg.name === 'Best') {
-            const tierClass = pkg.name.toLowerCase();
-            const packageEl = document.querySelector(`.tier-${tierClass}`);
-            if (packageEl) {
-                const inheritedEl = packageEl.querySelector('.inherited-items');
-                const inheritedItems = getInheritedItemNames(pkg.name);
-                
-                if (inheritedItems.length > 0) {
-                    if (inheritedEl) {
-                        inheritedEl.innerHTML = `<strong>Inherited:</strong> ${inheritedItems.join(', ')}`;
-                    } else {
-                        const header = packageEl.querySelector('.package-header');
-                        const newInheritedEl = document.createElement('div');
-                        newInheritedEl.className = 'inherited-items';
-                        newInheritedEl.innerHTML = `<strong>Inherited:</strong> ${inheritedItems.join(', ')}`;
-                        header.insertAdjacentElement('afterend', newInheritedEl);
-                    }
-                } else if (inheritedEl) {
-                    inheritedEl.remove();
-                }
-            }
+function updatePackageActionsVisibility() {
+    const blankCanvas = document.getElementById('blankCanvas');
+    const activePackages = getActivePackages();
+    const hasActivePackages = activePackages.length > 0;
+
+    if (blankCanvas) blankCanvas.hidden = hasActivePackages;
+}
+
+function togglePackageActive(packageId) {
+    const pkg = findPackage(packageId);
+    if (!pkg) return;
+
+    const activePackages = getActivePackages();
+    if (pkg.isActive !== false && activePackages.length <= 1) {
+        showActionConfirm({
+            title: 'Cannot minimize last tier',
+            message: 'At least one active tier is required.',
+            confirmText: 'OK',
+            cancelText: '',
+            onConfirm: () => {}
+        });
+        return;
+    }
+
+    saveToHistory();
+    pkg.isActive = !pkg.isActive;
+    render();
+    updateAllCalculations();
+    debouncedSave();
+}
+
+function deletePackagePermanently(packageId) {
+    const pkg = findPackage(packageId);
+    if (!pkg) return;
+
+    showActionConfirm({
+        title: 'Delete tier?',
+        message: 'This action cannot be undone. Continue?',
+        confirmText: 'Delete tier',
+        onConfirm: () => {
+            saveToHistory();
+            state.packages = state.packages.filter(p => p.id !== packageId);
+            render();
+            updateAllCalculations();
+            debouncedSave();
         }
     });
 }
 
+function resetPackageTier(packageId) {
+    const pkg = findPackage(packageId);
+    if (!pkg) return;
+
+    showActionConfirm({
+        title: 'Reset tier?',
+        message: 'This action cannot be undone. Continue?',
+        confirmText: 'Reset tier',
+        onConfirm: () => {
+            saveToHistory();
+            pkg.items = [];
+            pkg.costBasis = 0;
+            pkg.inheritFromPrevious = false;
+            pkg.isActive = true;
+            render();
+            updateAllCalculations();
+            debouncedSave();
+        }
+    });
+}
+
+function addNextTierFromPackage(packageId, nextTierKey) {
+    const nextTier = getStandardTierConfig(nextTierKey);
+    if (!nextTier) return;
+
+    const existing = state.packages.find(pkg => pkg.tierKey === nextTierKey);
+    if (existing) {
+        if (existing.isActive === false) {
+            saveToHistory();
+            existing.isActive = true;
+            render();
+            updateAllCalculations();
+            debouncedSave();
+        }
+        return;
+    }
+
+    addStandardTier(nextTierKey);
+}
+
+function openLibraryPanelForLoad() {
+    const libraryPanel = document.getElementById('libraryPanel');
+    if (libraryPanel) {
+        libraryPanel.removeAttribute('hidden');
+    }
+
+    const dropdownMenu = document.getElementById('dropdownMenu');
+    if (dropdownMenu) {
+        dropdownMenu.setAttribute('hidden', '');
+    }
+
+    const clientSelect = document.getElementById('clientSelect');
+    if (clientSelect) {
+        clientSelect.focus();
+    }
+}
+
+/* ============================================
+   INHERITANCE HELPERS
+   ============================================ */
+function updateInheritedItemsDisplay() {
+    const activePackages = getActivePackages();
+    activePackages.forEach((pkg, index) => {
+        const packageEl = document.querySelector(`.package[data-package-id="${pkg.id}"]`);
+        if (!packageEl) return;
+
+        const inheritedEl = packageEl.querySelector('.inherited-items');
+        const inheritedItems = getInheritedItemNamesForIndex(index, activePackages);
+
+            if (pkg.isActive !== false && pkg.inheritFromPrevious && inheritedItems.length > 0) {
+            if (inheritedEl) {
+                inheritedEl.innerHTML = `<strong>Inherited:</strong> ${inheritedItems.join(', ')}`;
+            } else {
+                const header = packageEl.querySelector('.package-header');
+                const newInheritedEl = document.createElement('div');
+                newInheritedEl.className = 'inherited-items';
+                newInheritedEl.innerHTML = `<strong>Inherited:</strong> ${inheritedItems.join(', ')}`;
+                header.insertAdjacentElement('afterend', newInheritedEl);
+            }
+        } else if (inheritedEl) {
+            inheritedEl.remove();
+        }
+    });
+}
+
+function closeAllTierMenus() {
+    document.querySelectorAll('.tier-menu').forEach(menu => {
+        menu.hidden = true;
+    });
+}
+
+function toggleTierMenu(packageId) {
+    const menu = document.querySelector(`.tier-menu[data-package-id="${packageId}"]`);
+    if (!menu) return;
+
+    const isHidden = menu.hidden;
+    closeAllTierMenus();
+    menu.hidden = !isHidden;
+}
+
 function updateEmptyStates() {
-    state.packages.forEach(pkg => {
-        const tierClass = pkg.name.toLowerCase();
-        const packageEl = document.querySelector(`.tier-${tierClass}`);
+    const activePackages = getActivePackages();
+    activePackages.forEach(pkg => {
+        const packageEl = document.querySelector(`.package[data-package-id="${pkg.id}"]`);
         if (packageEl) {
             const itemsSection = packageEl.querySelector('.items-section');
             let emptyState = itemsSection.querySelector('.empty-state');
@@ -874,9 +1236,55 @@ function updateEmptyStates() {
     });
 }
 
+function renderInactivePackagesList() {
+    const container = document.getElementById('inactivePackages');
+    const list = document.getElementById('inactivePackagesList');
+    if (!container || !list) return;
+
+    const inactivePackages = getInactivePackages();
+    container.hidden = inactivePackages.length === 0;
+    list.innerHTML = '';
+
+    inactivePackages.forEach(pkg => {
+        const pill = document.createElement('div');
+        pill.className = 'inactive-package-pill';
+        pill.innerHTML = `
+            <span>${pkg.name || 'Untitled'}</span>
+            <button class="btn-restore-package" data-package-id="${pkg.id}" aria-label="Restore ${pkg.name}">Restore</button>
+        `;
+        list.appendChild(pill);
+    });
+}
+
 /* ============================================
    PACKAGE CRUD
    ============================================ */
+function addStandardTier(tierKey) {
+    const config = getStandardTierConfig(tierKey);
+    if (!config) return;
+
+    if (state.packages.some(pkg => pkg.tierKey === tierKey)) {
+        return;
+    }
+
+    saveToHistory();
+    const newPackage = {
+        id: state.nextPackageId++,
+        name: config.name,
+        tierKey: config.key,
+        inheritFromPrevious: config.inheritFromPrevious,
+        isActive: true,
+        items: [],
+        costBasis: 0
+    };
+
+    insertPackageByTier(newPackage);
+    render();
+    updateAllCalculations();
+    debouncedSave();
+    showSaveStatus(`${config.name} package added`);
+}
+
 function addPackage() {
     const name = prompt('Enter package name (e.g., Premium, Deluxe):');
     if (name && name.trim()) {
@@ -884,6 +1292,9 @@ function addPackage() {
         state.packages.push({
             id: state.nextPackageId++,
             name: name.trim(),
+            tierKey: 'custom',
+            inheritFromPrevious: state.packages.length > 0,
+            isActive: true,
             items: [],
             costBasis: 0
         });
@@ -926,6 +1337,7 @@ function addItem(packageId, type) {
         pkg.items.push(newItem);
         renderItemsForPackage(packageId);
         updateEmptyStates();
+        updateInheritedItemsDisplay();
         updateAllCalculations();
         debouncedSave();
     }
@@ -946,12 +1358,14 @@ function updateItem(packageId, itemId, field, value) {
             if (item.type === 'hourly-product' && field === 'name') {
                 const summary = document.querySelector(`[data-hourly-id="${itemId}"] .hourly-product-summary`);
                 if (summary) summary.textContent = value || 'Untitled Deliverable';
+                    updateInheritedItemsDisplay();
             }
 
             // Update header display for flat products
             if (item.type === 'flat-product' && field === 'name') {
                 const summary = document.querySelector(`[data-flat-id="${itemId}"] .collapsible-summary`);
                 if (summary) summary.textContent = value || 'Untitled Product';
+                    updateInheritedItemsDisplay();
             }
 
             // Update flat product totals display
@@ -978,6 +1392,7 @@ function removeItem(packageId, itemId) {
         pkg.items = pkg.items.filter(i => i.id !== itemId);
         renderItemsForPackage(packageId);
         updateEmptyStates();
+        updateInheritedItemsDisplay();
         updateAllCalculations();
         debouncedSave();
     }
@@ -1192,14 +1607,37 @@ function renderNestedMembersForItem(packageId, itemId) {
    ============================================ */
 function createPackageElement(pkg, index) {
     const div = document.createElement('div');
-    const tierClass = pkg.name.toLowerCase();
-    div.className = `package tier-${tierClass}`;
+    const tierClass = pkg.tierKey || 'custom';
+    div.className = `package tier-${tierClass}${pkg.isActive === false ? ' package-inactive' : ''}`;
     div.setAttribute('role', 'listitem');
     div.setAttribute('aria-label', `${pkg.name} pricing tier`);
+    div.setAttribute('data-package-id', pkg.id);
 
-    let tierHint = '';
-    if (pkg.name === 'Better') tierHint = '(includes Good)';
-    if (pkg.name === 'Best') tierHint = '(includes Good + Better)';
+    const inheritanceToggleHtml = index > 0
+        ? `
+            <label class="tier-menu-item tier-menu-checkbox">
+                <input type="checkbox" class="inherit-toggle-input" data-package-id="${pkg.id}" ${pkg.inheritFromPrevious ? 'checked' : ''}>
+                <span>Include previous tiers</span>
+            </label>
+        `
+        : '';
+
+    const nextTierConfig = (() => {
+        const currentIndex = STANDARD_TIERS.findIndex(tier => tier.key === pkg.tierKey);
+        if (currentIndex === -1 || currentIndex >= STANDARD_TIERS.length - 1) return null;
+        return STANDARD_TIERS[currentIndex + 1];
+    })();
+
+    const nextTierLabel = nextTierConfig ? `Add ${nextTierConfig.name}` : '';
+    const nextTierAlreadyActive = nextTierConfig
+        ? state.packages.some(existingPkg => existingPkg.tierKey === nextTierConfig.key && existingPkg.isActive !== false)
+        : false;
+    const nextTierButtonHtml = nextTierConfig
+        ? `
+            <button class="btn btn-primary package-action-btn package-add-tier-floating btn-add-next-tier" data-package-id="${pkg.id}" data-next-tier="${nextTierConfig.key}" aria-label="${nextTierLabel}" ${nextTierAlreadyActive ? 'disabled' : ''}>+ Tier</button>
+        `
+        : '';
+
 
     const emptyStateHtml = pkg.items.length === 0 
         ? `<div class="empty-state" role="status">No deliverables yet. Add a flat-rate or hourly item above.</div>` 
@@ -1207,7 +1645,23 @@ function createPackageElement(pkg, index) {
 
     div.innerHTML = `
         <header class="package-header">
-            <h3 class="package-title">${pkg.name}<span class="tier-hint">${tierHint}</span></h3>
+            <div class="package-header-left">
+                <div class="package-title">
+                    <input type="text" class="package-title-input" data-package-id="${pkg.id}" value="${pkg.name}" aria-label="Package name">
+                </div>
+            </div>
+            <div class="package-actions-right">
+                ${nextTierButtonHtml}
+                <div class="package-menu">
+                    <button class="btn btn-icon package-action-icon btn-tier-menu" data-package-id="${pkg.id}" aria-label="Open tier menu" title="Tier settings">☰</button>
+                    <div class="tier-menu" data-package-id="${pkg.id}" hidden>
+                        ${inheritanceToggleHtml}
+                        <button class="tier-menu-item btn-reset-tier" data-package-id="${pkg.id}">Reset tier</button>
+                        <button class="tier-menu-item btn-minimize-package" data-package-id="${pkg.id}">Minimize tier</button>
+                        <button class="tier-menu-item btn-delete-package" data-package-id="${pkg.id}">Delete tier</button>
+                    </div>
+                </div>
+            </div>
         </header>
 
         <div class="items-section">
@@ -1530,7 +1984,9 @@ function createNestedTeamMemberElement(packageId, itemId, member) {
 function updateAllCalculations() {
     state.globalMarkupPercent = parseFloat(document.getElementById('globalMarkup').value) || 0;
 
-    state.packages.forEach(pkg => {
+    const activePackages = getActivePackages();
+    activePackages.forEach((pkg, index) => {
+
         let baseTotal = 0;
         let markupTotal = 0;
         const customMarkupItems = [];
@@ -1571,71 +2027,28 @@ function updateAllCalculations() {
             }
         });
 
-        // Add items from previous tiers for Better and Best
-        if (pkg.name === 'Better') {
-            const goodPkg = state.packages.find(p => p.name === 'Good');
-            if (goodPkg) {
-                goodPkg.items.forEach(item => {
-                    baseTotal += calculateBaseAmount(item);
-                    markupTotal += calculateMarkupAmount(item);
-                    // Track custom markup items from inherited packages
-                    if (item.type === 'hourly-product' && item.packageElements) {
-                        item.packageElements.forEach(member => {
-                            if (member.useCustomMarkup && member.customMarkupPercent !== undefined) {
-                                const memberBase = (member.costRate || 0) * (member.hours || 0);
-                                const memberMarkup = memberBase * (member.customMarkupPercent / 100);
-                                customMarkupItems.push({
-                                    name: member.name || 'Unnamed',
-                                    markup: memberMarkup,
-                                    percent: member.customMarkupPercent
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-        } else if (pkg.name === 'Best') {
-            const goodPkg = state.packages.find(p => p.name === 'Good');
-            const betterPkg = state.packages.find(p => p.name === 'Better');
-            if (goodPkg) {
-                goodPkg.items.forEach(item => {
-                    baseTotal += calculateBaseAmount(item);
-                    markupTotal += calculateMarkupAmount(item);
-                    if (item.type === 'hourly-product' && item.packageElements) {
-                        item.packageElements.forEach(member => {
-                            if (member.useCustomMarkup && member.customMarkupPercent !== undefined) {
-                                const memberBase = (member.costRate || 0) * (member.hours || 0);
-                                const memberMarkup = memberBase * (member.customMarkupPercent / 100);
-                                customMarkupItems.push({
-                                    name: member.name || 'Unnamed',
-                                    markup: memberMarkup,
-                                    percent: member.customMarkupPercent
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-            if (betterPkg) {
-                betterPkg.items.forEach(item => {
-                    baseTotal += calculateBaseAmount(item);
-                    markupTotal += calculateMarkupAmount(item);
-                    if (item.type === 'hourly-product' && item.packageElements) {
-                        item.packageElements.forEach(member => {
-                            if (member.useCustomMarkup && member.customMarkupPercent !== undefined) {
-                                const memberBase = (member.costRate || 0) * (member.hours || 0);
-                                const memberMarkup = memberBase * (member.customMarkupPercent / 100);
-                                customMarkupItems.push({
-                                    name: member.name || 'Unnamed',
-                                    markup: memberMarkup,
-                                    percent: member.customMarkupPercent
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-        }
+        // Add items from previous tiers if inheritance is enabled
+        const inheritedPackages = getInheritedPackagesForIndex(index, activePackages);
+        inheritedPackages.forEach(inheritedPkg => {
+            inheritedPkg.items.forEach(item => {
+                baseTotal += calculateBaseAmount(item);
+                markupTotal += calculateMarkupAmount(item);
+                // Track custom markup items from inherited packages
+                if (item.type === 'hourly-product' && item.packageElements) {
+                    item.packageElements.forEach(member => {
+                        if (member.useCustomMarkup && member.customMarkupPercent !== undefined) {
+                            const memberBase = (member.costRate || 0) * (member.hours || 0);
+                            const memberMarkup = memberBase * (member.customMarkupPercent / 100);
+                            customMarkupItems.push({
+                                name: member.name || 'Unnamed',
+                                markup: memberMarkup,
+                                percent: member.customMarkupPercent
+                            });
+                        }
+                    });
+                }
+            });
+        });
 
         // Render custom markup breakdown
         const breakdownContainer = document.getElementById(`custom-markup-breakdown-${pkg.id}`);
@@ -1689,7 +2102,8 @@ function downloadItemsAsCSV() {
     rows.push(['=== SUMMARY BY PACKAGE ===']);
     rows.push(['Package', 'Cost Basis', 'Base Total', 'Markup', 'Final Total', 'Profit', 'Margin %']);
     
-    state.packages.forEach(pkg => {
+    const activePackages = getActivePackages();
+    activePackages.forEach((pkg, index) => {
         let baseTotal = 0;
         let markupTotal = 0;
 
@@ -1698,31 +2112,14 @@ function downloadItemsAsCSV() {
             markupTotal += calculateMarkupAmount(item);
         });
 
-        // Add previous tiers for Better and Best
-        if (pkg.name === 'Better') {
-            const goodPkg = state.packages.find(p => p.name === 'Good');
-            if (goodPkg) {
-                goodPkg.items.forEach(item => {
-                    baseTotal += calculateBaseAmount(item);
-                    markupTotal += calculateMarkupAmount(item);
-                });
-            }
-        } else if (pkg.name === 'Best') {
-            const goodPkg = state.packages.find(p => p.name === 'Good');
-            const betterPkg = state.packages.find(p => p.name === 'Better');
-            if (goodPkg) {
-                goodPkg.items.forEach(item => {
-                    baseTotal += calculateBaseAmount(item);
-                    markupTotal += calculateMarkupAmount(item);
-                });
-            }
-            if (betterPkg) {
-                betterPkg.items.forEach(item => {
-                    baseTotal += calculateBaseAmount(item);
-                    markupTotal += calculateMarkupAmount(item);
-                });
-            }
-        }
+        // Add previous tiers if inheritance is enabled
+        const inheritedPackages = getInheritedPackagesForIndex(index, activePackages);
+        inheritedPackages.forEach(inheritedPkg => {
+            inheritedPkg.items.forEach(item => {
+                baseTotal += calculateBaseAmount(item);
+                markupTotal += calculateMarkupAmount(item);
+            });
+        });
 
         const finalTotal = baseTotal + markupTotal;
         const costBasis = pkg.costBasis || 0;
@@ -1746,7 +2143,7 @@ function downloadItemsAsCSV() {
     rows.push(['=== ITEMS DETAIL ===']);
     rows.push(['Package', 'Item Type', 'Item Name', 'Unit Price', 'Quantity', 'Base Amount', 'Markup %', 'Markup Amount', 'Final Amount', 'Description']);
 
-    state.packages.forEach(pkg => {
+    activePackages.forEach(pkg => {
         pkg.items.forEach(item => {
             const base = calculateBaseAmount(item);
             const markup = calculateMarkupAmount(item);
@@ -1788,7 +2185,7 @@ function downloadItemsAsCSV() {
     rows.push(['=== PACKAGE ELEMENTS (Nested) ===']);
     rows.push(['Package', 'Parent Item', 'Element Name', 'Cost Rate', 'Sell Rate', 'Hours', 'Base Amount', 'Markup %', 'Markup Amount', 'Final Amount', 'Custom Markup', 'Calculation']);
 
-    state.packages.forEach(pkg => {
+    activePackages.forEach(pkg => {
         pkg.items.forEach(item => {
             if (item.type === 'hourly-product' && item.packageElements && item.packageElements.length > 0) {
                 item.packageElements.forEach(member => {
@@ -1834,7 +2231,7 @@ function downloadItemsAsCSV() {
     rows.push(['=== DELIVERABLE NOTES ===']);
     rows.push(['Package', 'Deliverable', 'Notes']);
 
-    state.packages.forEach(pkg => {
+    activePackages.forEach(pkg => {
         pkg.items.forEach(item => {
             if (item.notes && item.notes.trim()) {
                 rows.push([
@@ -1884,12 +2281,11 @@ function downloadSimpleText() {
     const lines = [''];
     
     // Process each package tier
-    ['Good', 'Better', 'Best'].forEach((tierName, index) => {
-        const pkg = state.packages.find(p => p.name === tierName);
+    activePackages.forEach((pkg, index) => {
         if (!pkg) return;
-        
+
         // Add tier header in uppercase
-        lines.push(tierName.toUpperCase());
+        lines.push((pkg.name || 'Untitled').toUpperCase());
         
         // Only show items specific to this tier (not inherited)
         pkg.items.forEach((item, itemIndex) => {
@@ -1904,7 +2300,7 @@ function downloadSimpleText() {
         });
         
         // Add extra blank lines between tiers (except after the last one)
-        if (index < 2) {
+        if (index < activePackages.length - 1) {
             lines.push('');
             lines.push('');
         }
@@ -1952,14 +2348,10 @@ function resetEverything() {
     // Reset to initial state but keep templates and clients
     state = {
         projectName: '',
-        packages: [
-            { id: 1, name: 'Good', items: [], costBasis: 0 },
-            { id: 2, name: 'Better', items: [], costBasis: 0 },
-            { id: 3, name: 'Best', items: [], costBasis: 0 }
-        ],
+        packages: [],
         globalMarkupPercent: 20,
         globalShowMargin: true,
-        nextPackageId: 4,
+        nextPackageId: 1,
         nextItemId: 1,
         nextNestedMemberId: 1,
         templates: savedTemplates,
@@ -1974,6 +2366,8 @@ function resetEverything() {
     // Update UI
     document.getElementById('projectName').value = '';
     document.getElementById('globalMarkup').value = 20;
+    const globalMarginToggle = document.getElementById('globalMarginToggle');
+    if (globalMarginToggle) globalMarginToggle.checked = true;
     
     render();
     updateAllCalculations();
@@ -2000,15 +2394,18 @@ function loadStateFromJSON(event) {
             // Ensure all required fields are present
             if (state.projectName === undefined) state.projectName = '';
             if (state.globalMarkupPercent === undefined) state.globalMarkupPercent = 20;
-            if (state.nextPackageId === undefined) state.nextPackageId = 4;
+            if (state.globalShowMargin === undefined) state.globalShowMargin = true;
+            if (state.nextPackageId === undefined) state.nextPackageId = 1;
             if (state.nextItemId === undefined) state.nextItemId = 1;
             if (state.nextNestedMemberId === undefined) state.nextNestedMemberId = 1;
             if (state.templates === undefined) state.templates = {};
             if (state.clients === undefined) state.clients = {};
+            if (state.customRoles === undefined) state.customRoles = [];
+            if (state.industryRoleOverrides === undefined) state.industryRoleOverrides = {};
 
             // Ensure all packages have new fields
-            state.packages.forEach(pkg => {
-                if (pkg.costBasis === undefined) pkg.costBasis = 0;
+            state.packages.forEach((pkg, index) => {
+                normalizePackage(pkg, index);
                 if (pkg.items) {
                     pkg.items.forEach(item => {
                         if (item.notes === undefined) item.notes = '';
@@ -2306,13 +2703,20 @@ function render() {
     const grid = document.getElementById('packagesGrid');
     if (!grid) return;
     grid.innerHTML = '';
-    state.packages.forEach((pkg, index) => {
+    const activePackages = getActivePackages();
+    grid.classList.toggle('packages-grid-centered', activePackages.length < 3);
+    activePackages.forEach((pkg, index) => {
         const pkgEl = createPackageElement(pkg, index);
         grid.appendChild(pkgEl);
     });
     
     // Enable drag and drop after rendering
     enableDragAndDrop();
+
+    updatePackageActionsVisibility();
+    updateEmptyStates();
+    updateInheritedItemsDisplay();
+    renderInactivePackagesList();
 }
 
 /* ============================================
@@ -2326,6 +2730,53 @@ function attachEventListeners() {
     
     // Click event delegation
     grid.addEventListener('click', e => {
+        if (e.target.classList.contains('btn-tier-menu') || e.target.closest('.btn-tier-menu')) {
+            const btn = e.target.classList.contains('btn-tier-menu') ? e.target : e.target.closest('.btn-tier-menu');
+            const packageId = parseInt(btn.dataset.packageId);
+            e.stopPropagation();
+            toggleTierMenu(packageId);
+            return false;
+        }
+
+        if (e.target.classList.contains('btn-add-next-tier') || e.target.closest('.btn-add-next-tier')) {
+            const btn = e.target.classList.contains('btn-add-next-tier') ? e.target : e.target.closest('.btn-add-next-tier');
+            const packageId = parseInt(btn.dataset.packageId);
+            const nextTierKey = btn.dataset.nextTier;
+            addNextTierFromPackage(packageId, nextTierKey);
+            return false;
+        }
+
+        if (e.target.classList.contains('btn-toggle-package') || e.target.closest('.btn-toggle-package')) {
+            const btn = e.target.classList.contains('btn-toggle-package') ? e.target : e.target.closest('.btn-toggle-package');
+            const packageId = parseInt(btn.dataset.packageId);
+            togglePackageActive(packageId);
+            return false;
+        }
+
+        if (e.target.classList.contains('btn-minimize-package') || e.target.closest('.btn-minimize-package')) {
+            const btn = e.target.classList.contains('btn-minimize-package') ? e.target : e.target.closest('.btn-minimize-package');
+            const packageId = parseInt(btn.dataset.packageId);
+            togglePackageActive(packageId);
+            closeAllTierMenus();
+            return false;
+        }
+
+        if (e.target.classList.contains('btn-delete-package') || e.target.closest('.btn-delete-package')) {
+            const btn = e.target.classList.contains('btn-delete-package') ? e.target : e.target.closest('.btn-delete-package');
+            const packageId = parseInt(btn.dataset.packageId);
+            deletePackagePermanently(packageId);
+            closeAllTierMenus();
+            return false;
+        }
+
+        if (e.target.classList.contains('btn-reset-tier') || e.target.closest('.btn-reset-tier')) {
+            const btn = e.target.classList.contains('btn-reset-tier') ? e.target : e.target.closest('.btn-reset-tier');
+            const packageId = parseInt(btn.dataset.packageId);
+            resetPackageTier(packageId);
+            closeAllTierMenus();
+            return false;
+        }
+
         if (e.target.classList.contains('btn-add-flat-product') || e.target.closest('.btn-add-flat-product')) {
             const btn = e.target.classList.contains('btn-add-flat-product') ? e.target : e.target.closest('.btn-add-flat-product');
             const packageId = parseInt(btn.dataset.packageId);
@@ -2440,6 +2891,11 @@ function attachEventListeners() {
 
     // Input event delegation
     grid.addEventListener('input', e => {
+        if (e.target.classList.contains('package-title-input')) {
+            const packageId = parseInt(e.target.dataset.packageId);
+            updatePackageName(packageId, e.target.value, false);
+        }
+
         if (e.target.classList.contains('item-input')) {
             const packageId = parseInt(e.target.dataset.packageId);
             const itemId = parseInt(e.target.dataset.itemId);
@@ -2473,6 +2929,23 @@ function attachEventListeners() {
 
     // Change event delegation for checkboxes and selects
     grid.addEventListener('change', e => {
+        if (e.target.classList.contains('package-title-input')) {
+            const packageId = parseInt(e.target.dataset.packageId);
+            updatePackageName(packageId, e.target.value, true);
+        }
+
+        if (e.target.classList.contains('inherit-toggle-input')) {
+            const packageId = parseInt(e.target.dataset.packageId);
+            const pkg = findPackage(packageId);
+            if (pkg) {
+                saveToHistory();
+                pkg.inheritFromPrevious = e.target.checked;
+                updateInheritedItemsDisplay();
+                updateAllCalculations();
+                debouncedSave();
+            }
+        }
+
         if (e.target.classList.contains('custom-markup-checkbox')) {
             const packageId = parseInt(e.target.dataset.packageId);
             const itemId = parseInt(e.target.dataset.itemId);
@@ -2741,6 +3214,28 @@ function attachEventListeners() {
     document.getElementById('resetAll').addEventListener('click', showResetConfirmation);
     document.getElementById('confirmReset').addEventListener('click', resetEverything);
     document.getElementById('cancelReset').addEventListener('click', hideResetConfirmation);
+
+    // Action confirm modal
+    const actionConfirmModal = document.getElementById('actionConfirmModal');
+    const actionConfirmAccept = document.getElementById('actionConfirmAccept');
+    const actionConfirmCancel = document.getElementById('actionConfirmCancel');
+    if (actionConfirmAccept) {
+        actionConfirmAccept.addEventListener('click', () => {
+            const callback = actionConfirmCallback;
+            hideActionConfirm();
+            if (callback) callback();
+        });
+    }
+    if (actionConfirmCancel) {
+        actionConfirmCancel.addEventListener('click', hideActionConfirm);
+    }
+    if (actionConfirmModal) {
+        actionConfirmModal.addEventListener('click', (e) => {
+            if (e.target.id === 'actionConfirmModal') {
+                hideActionConfirm();
+            }
+        });
+    }
     
     // Close modal on overlay click or Escape key
     document.getElementById('confirmModal').addEventListener('click', (e) => {
@@ -2756,6 +3251,9 @@ function attachEventListeners() {
             }
             if (!document.getElementById('notesModal').hidden) {
                 hideNotesModal();
+            }
+            if (!document.getElementById('actionConfirmModal').hidden) {
+                hideActionConfirm();
             }
         }
     });
@@ -2785,6 +3283,15 @@ function attachEventListeners() {
     const addCustomRoleBtn = document.getElementById('addCustomRoleBtn');
     if (addCustomRoleBtn) {
         addCustomRoleBtn.addEventListener('click', addCustomRole);
+    }
+
+    const presetEditorSave = document.getElementById('presetEditorSave');
+    const presetEditorCancel = document.getElementById('presetEditorCancel');
+    if (presetEditorSave) {
+        presetEditorSave.addEventListener('click', savePresetEditor);
+    }
+    if (presetEditorCancel) {
+        presetEditorCancel.addEventListener('click', hidePresetEditor);
     }
     
     // Presets modal - delegation for edit/delete buttons
@@ -2825,6 +3332,53 @@ function attachEventListeners() {
             }
         }
     });
+
+    // Close tier menus on outside click or Escape
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.package-menu')) {
+            closeAllTierMenus();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeAllTierMenus();
+        }
+    });
+
+    // Blank canvas actions
+    const blankAddPackageBtn = document.getElementById('blankAddPackageBtn');
+    if (blankAddPackageBtn) {
+        blankAddPackageBtn.addEventListener('click', () => {
+            addStandardTier('good');
+        });
+    }
+
+    const blankLoadEstimateBtn = document.getElementById('blankLoadEstimateBtn');
+    if (blankLoadEstimateBtn) {
+        blankLoadEstimateBtn.addEventListener('click', () => {
+            openLibraryPanelForLoad();
+        });
+    }
+
+    // Inactive package restore
+    const inactivePackagesList = document.getElementById('inactivePackagesList');
+    if (inactivePackagesList) {
+        inactivePackagesList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-restore-package');
+            if (!btn) return;
+            const packageId = parseInt(btn.dataset.packageId);
+            const pkg = findPackage(packageId);
+            if (pkg) {
+                saveToHistory();
+                pkg.isActive = true;
+                render();
+                updateAllCalculations();
+                debouncedSave();
+            }
+        });
+    }
+
 }
 
 /* ============================================
